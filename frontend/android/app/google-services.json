@@ -1,0 +1,118 @@
+{
+  "project_info": {
+    "project_number": "484752358530",
+    "project_id": "healthy-tracker-target",
+    "storage_bucket": "healthy-tracker-target.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484752358530:android:65b5f889840f1ae95dc89b",
+        "android_client_info": {
+          "package_name": "com.company.healthy_tracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "484752358530-i8i1fd51gmup5cfi4ngbrc7sf0m0c4dq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPD1mBZW1lQkWAnbastovYKS8IpnBnb4A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "484752358530-i8i1fd51gmup5cfi4ngbrc7sf0m0c4dq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "484752358530-3kfhhrvfau32hgko2s4pasah1u5cmbb5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.h"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484752358530:android:e79fbe1ab61a28515dc89b",
+        "android_client_info": {
+          "package_name": "com.healthy.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "484752358530-i8i1fd51gmup5cfi4ngbrc7sf0m0c4dq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPD1mBZW1lQkWAnbastovYKS8IpnBnb4A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "484752358530-i8i1fd51gmup5cfi4ngbrc7sf0m0c4dq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "484752358530-3kfhhrvfau32hgko2s4pasah1u5cmbb5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.h"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484752358530:android:3693d8ed993985ce5dc89b",
+        "android_client_info": {
+          "package_name": "com.healthy.tracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "484752358530-i8i1fd51gmup5cfi4ngbrc7sf0m0c4dq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPD1mBZW1lQkWAnbastovYKS8IpnBnb4A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "484752358530-i8i1fd51gmup5cfi4ngbrc7sf0m0c4dq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "484752358530-3kfhhrvfau32hgko2s4pasah1u5cmbb5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.h"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
