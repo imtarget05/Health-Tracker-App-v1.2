@@ -194,16 +194,7 @@ export const updateProfile = async (req, res) => {
 
     // Upload hoặc update avatar
     if (profilePic) {
-      // Ở đây giả sử bạn có cloudinary cấu hình sẵn ở chỗ khác
-      // Nếu profilePic là base64 data URL thì upload; nếu là URL thì ghi thẳng
-      if (profilePic.startsWith("data:image")) {
-        const uploadResult = await cloudinary.uploader.upload(profilePic, {
-          folder: "profile_pics",
-        });
-        updateData.profilePic = uploadResult.secure_url;
-      } else {
-        updateData.profilePic = profilePic;
-      }
+      updateData.profilePic = profilePic;
     }
 
     // Update fullname
