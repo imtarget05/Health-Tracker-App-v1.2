@@ -1,27 +1,30 @@
+// src/controllers/upload.controller.js
 import fs from "fs/promises";
-import path from "path";
-
 import { db, bucket } from "../lib/firebase.js";
 import { AI_SERVICE_URL } from "../config/env.js";
+import {
+    handleAiProcessingSuccess,
+    handleAiProcessingFailure,
+} from "../notifications/notification.logic.js";
 
 const getPublicUrl = (bucket, filePath) =>
     `https://storage.googleapis.com/${bucket.name}/${filePath}`;
 
 export const uploadFileController = async (req, res) => {
+    let localPath;
     try {
-        // 1. Kiểm tra file + user
         if (!req.file) {
             return res.status(400).json({ message: "File is required (field: file)" });
         }
 
-        const user = req.user || null; // protectRoute gắn sẵn
+        const user = req.user || null;
         const userId = user?.uid || user?.userId || null;
 
-        const localPath = req.file.path;
+        localPath = req.file.path;
         const originalName = req.file.originalname;
         const mimeType = req.file.mimetype;
 
-        // 2. Upload lên Firebase Storage
+        // 1. Upload ảnh lên Firebase Storage
         const fileNameOnBucket = `food-images/${Date.now()}-${originalName}`;
         await bucket.upload(localPath, {
             destination: fileNameOnBucket,
@@ -30,13 +33,13 @@ export const uploadFileController = async (req, res) => {
 
         const imageUrl = getPublicUrl(bucket, fileNameOnBucket);
 
-        // 3. Gọi AI service -> nhận JSON giống mẫu em gửi
+        // 2. Gọi AI service
         const fileBuffer = await fs.readFile(localPath);
 
         const aiResponse = await fetch(`${AI_SERVICE_URL}/predict`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/octet-stream", // nếu bên AI dùng form-data thì đổi chỗ này
+                "Content-Type": "application/octet-stream",
             },
             body: fileBuffer,
         });
@@ -44,6 +47,12 @@ export const uploadFileController = async (req, res) => {
         if (!aiResponse.ok) {
             const errorText = await aiResponse.text();
             console.error("AI service error:", errorText);
+
+            // 🔔 Gửi notification thất bại AI (nếu có user)
+            if (userId) {
+                await handleAiProcessingFailure({ userId });
+            }
+
             return res.status(502).json({
                 message: "AI service error",
                 raw: errorText,
@@ -51,11 +60,14 @@ export const uploadFileController = async (req, res) => {
         }
 
         const aiData = await aiResponse.json();
-        // aiData = JSON giống em gửi (success, detections, total_nutrition, ...)
 
-        if (!aiData.success) {
+        if (!aiData.success || !Array.isArray(aiData.detections) || aiData.detections.length === 0) {
+            if (userId) {
+                await handleAiProcessingFailure({ userId });
+            }
+
             return res.status(400).json({
-                message: "AI detection failed",
+                message: "No food detected in image",
             });
         }
 
@@ -64,7 +76,7 @@ export const uploadFileController = async (req, res) => {
         const itemsCount = aiData.items_count ?? detections.length;
         const imageDimensions = aiData.image_dimensions || null;
 
-        // 4. (Optional) Nếu muốn chọn 1 món chính (ví dụ món có calories lớn nhất)
+        // Chọn detection chính (món có nhiều calories nhất)
         let mainDetection = null;
         if (detections.length > 0) {
             mainDetection = detections.reduce((max, cur) => {
@@ -76,13 +88,12 @@ export const uploadFileController = async (req, res) => {
 
         const now = new Date().toISOString();
 
-        // 5. Lưu log vào Firestore
-        const docData = {
+        const logData = {
             userId,
             imagePath: fileNameOnBucket,
             imageUrl,
-            detections,        // lưu nguyên array
-            totalNutrition,    // tổng calories, protein, fat, carbs, ...
+            detections,
+            totalNutrition,
             itemsCount,
             imageDimensions,
             mainFood: mainDetection
@@ -96,27 +107,50 @@ export const uploadFileController = async (req, res) => {
             createdAt: now,
         };
 
-        const docRef = await db.collection("foodDetections").add(docData);
+        const docRef = await db.collection("foodDetections").add(logData);
 
-        // 6. Xoá file tạm
+        // 🔔 Gửi notification thành công AI (kèm deep link)
+        if (userId && mainDetection) {
+            const deepLinkUrl = `healthytracker://detection/${docRef.id}`; // tuỳ mobile định nghĩa
+
+            await handleAiProcessingSuccess({
+                userId,
+                mealType: "bữa ăn", // hoặc truyền chính xác hơn từ FE
+                foodName: mainDetection.food,
+                calories: mainDetection.nutrition?.calories ?? 0,
+                deepLinkUrl,
+            });
+        }
+
+        // Xoá file tạm
         try {
             await fs.unlink(localPath);
         } catch (e) {
             console.warn("Cannot remove temp file:", localPath, e.message);
         }
 
-        // 7. Trả về JSON cho Flutter
         return res.status(200).json({
             id: docRef.id,
             imageUrl,
             itemsCount,
             detections,
             totalNutrition,
-            mainFood: docData.mainFood,
+            mainFood: logData.mainFood,
             createdAt: now,
         });
     } catch (error) {
         console.error("Error in uploadFileController:", error);
-        return res.status(500).json({ message: "Internal server error" });
+
+        if (localPath) {
+            try {
+                await fs.unlink(localPath);
+            } catch (e) {
+                console.warn("Cannot remove temp file:", localPath, e.message);
+            }
+        }
+
+        return res.status(500).json({
+            message: "Internal server error",
+        });
     }
 };

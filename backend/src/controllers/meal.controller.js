@@ -1,4 +1,6 @@
+// src/controllers/meal.controller.js
 import { db } from "../lib/firebase.js";
+import { handleCalorieWarningAfterMealLogged } from "../notifications/notification.logic.js";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -171,6 +173,44 @@ export const createMealFromDetection = async (req, res) => {
         // 4. Commit batch
         await batch.commit();
 
+        // 5. Sau khi lưu thành công -> tính tổng calo trong ngày & gửi cảnh báo nếu cần
+        try {
+            // Lấy targetCalories từ healthProfiles
+            let targetCalories = null;
+            const profileSnap = await db
+                .collection("healthProfiles")
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            if (!profileSnap.empty) {
+                const profile = profileSnap.docs[0].data();
+                targetCalories = profile.targetCaloriesPerDay || null;
+            }
+
+            // Tính tổng calories của tất cả meals trong ngày
+            const todayMealsSnap = await db
+                .collection("meals")
+                .where("userId", "==", userId)
+                .where("date", "==", mealDate)
+                .get();
+
+            let dailyTotal = 0;
+            todayMealsSnap.forEach((doc) => {
+                const data = doc.data();
+                dailyTotal += data.totalCalories || 0;
+            });
+
+            await handleCalorieWarningAfterMealLogged({
+                userId,
+                currentCalories: dailyTotal,
+                targetCalories,
+                now: new Date(),
+            });
+        } catch (notifyErr) {
+            console.error("Error sending calorie warning notification:", notifyErr);
+        }
+
         return res.status(201).json({
             id: mealRef.id,
             ...mealDoc,
@@ -181,7 +221,7 @@ export const createMealFromDetection = async (req, res) => {
     }
 };
 
-// Lấy danh sách meal theo ngày
+// GET /meals?date=YYYY-MM-DD
 export const getMealsByDate = async (req, res) => {
     try {
         const user = req.user;
