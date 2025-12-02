@@ -11,6 +11,15 @@ import aiRoutes from "./routes/ai.route.js";
 import authRoutes from "./routes/auth.route.js";
 import uploadRoutes from "./routes/upload.route.js";
 import notificationRoutes from "./routes/notification.route.js";
+import vnpayRoutes from "./routes/vnpay.route.js";
+
+// import { firebasePromise } from "./lib/firebase.js";
+// import { startNotificationSchedulers } from "./notifications/notification.scheduler.js";
+
+const router = express.Router();
+
+
+export default router;
 
 import { firebasePromise } from "./lib/firebase.js";
 import { startNotificationSchedulers } from "./notifications/notification.scheduler.js";
@@ -41,7 +50,7 @@ const startServer = async () => {
         app.use("/stats", statsRoutes);        // /stats/daily, /stats/weekly, /stats/monthly
         app.use("/ai", aiRoutes);              // /ai/chat
         app.use("/notifications", notificationRoutes); // /notifications/test,...
-
+        app.use("/api/vnpay", vnpayRoutes);
         // Health check
         app.get("/api/health", (req, res) => {
             res.json({
