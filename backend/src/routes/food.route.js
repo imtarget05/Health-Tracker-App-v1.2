@@ -1,5 +1,5 @@
 import express from "express";
-import upload from "../middleware/upload-middleware.js";
+import upload from "../middleware/upload.middleware.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 import { scanFood } from "../controllers/food.controller.js";
 

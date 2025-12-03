@@ -8,11 +8,6 @@ const REQUIRED_ENV_VARS = [
     "JWT_SECRET",
     "AI_SERVICE_URL",
     "AI_CHAT_API_KEY",
-    // Có thể thêm:
-    // "FIREBASE_PROJECT_ID",
-    // "FIREBASE_CLIENT_EMAIL",
-    // "FIREBASE_PRIVATE_KEY",
-    // "FIREBASE_STORAGE_BUCKET",
 ];
 
 const missing = REQUIRED_ENV_VARS.filter(

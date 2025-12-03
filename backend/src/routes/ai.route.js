@@ -1,12 +1,14 @@
+// src/routes/ai.route.js
 import express from "express";
-import { chatWithAI } from "../controllers/chat.controller.js";
+import { chatWithAiCoach } from "../controllers/ai.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/chat", protectRoute, chatWithAI);
+// Nếu muốn chat phải login mới được (có profile) → dùng protectRoute
+router.post("/chat", protectRoute, chatWithAiCoach);
 
-// Nếu muốn cho guest cũng chat được (bỏ protectRoute):
-// router.post("/chat", chatWithAI);
+// Nếu muốn thử không cần login, có thể thêm:
+// router.post("/chat-public", chatWithAiCoach);
 
 export default router;
