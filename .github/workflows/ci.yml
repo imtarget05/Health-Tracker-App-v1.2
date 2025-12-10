@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-tests:
+    name: Backend tests (Firestore emulator)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "${{ matrix.node-version }}"
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: "${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('backend/package.json') }}"
+          restore-keys: |
+            "${{ runner.os }}-node-${{ matrix.node-version }}-"
+            "${{ runner.os }}-node-"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: backend
+
+      - name: Run backend tests with Firestore emulator
+        working-directory: backend
+        env:
+          CI: 'true'
+        run: |
+          # Use npx to run firebase-tools emulators:exec which starts emulator, runs commands, then stops
+          npx --yes firebase-tools@latest emulators:exec --only firestore --project=demo-project "npm run seed:emulator && npm test"

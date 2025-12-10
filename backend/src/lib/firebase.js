@@ -1,4 +1,3 @@
-// src/lib/firebase.js
 import { config } from "dotenv";
 config();
 
@@ -20,6 +19,20 @@ const initializeFirebase = async () => {
             db = admin.firestore();
             storage = admin.storage();
             bucket = storage.bucket(process.env.FIREBASE_STORAGE_BUCKET);
+
+            return { auth, db, storage, bucket, app };
+        }
+
+        const isEmulator = !!process.env.FIRESTORE_EMULATOR_HOST || process.env.USE_FIREBASE_EMULATOR === "1";
+        if (isEmulator) {
+            // When using the emulator, avoid requiring a real service account.
+            app = admin.initializeApp();
+            auth = admin.auth();
+            db = admin.firestore();
+            storage = admin.storage ? admin.storage() : undefined;
+            bucket = storage && process.env.FIREBASE_STORAGE_BUCKET ? storage.bucket(process.env.FIREBASE_STORAGE_BUCKET) : undefined;
+
+            console.log(" Firebase Admin initialized in EMULATOR mode");
 
             return { auth, db, storage, bucket, app };
         }
@@ -61,5 +74,33 @@ const initializeFirebase = async () => {
 
 const firebasePromise = initializeFirebase();
 
+// --- Safe getters ---------------------------------------------------------
+// Use these to avoid accidentally using uninitialized bindings.
+export const getAuth = () => {
+    if (!auth) throw new Error("Firebase not initialized yet. Await firebasePromise first.");
+    return auth;
+};
+
+export const getDb = () => {
+    if (!db) throw new Error("Firebase not initialized yet. Await firebasePromise first.");
+    return db;
+};
+
+export const getStorage = () => {
+    if (!storage) throw new Error("Firebase not initialized yet. Await firebasePromise first.");
+    return storage;
+};
+
+export const getBucket = () => {
+    if (!bucket) throw new Error("Firebase not initialized yet. Await firebasePromise first.");
+    return bucket;
+};
+
+export const getApp = () => {
+    if (!app) throw new Error("Firebase not initialized yet. Await firebasePromise first.");
+    return app;
+};
+
+// Backwards-compatible named exports (these will be populated after init)
 export { auth, db, storage, bucket, app, firebasePromise };
 export default app;

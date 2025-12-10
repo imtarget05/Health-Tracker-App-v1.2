@@ -4,7 +4,13 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "worker": "node src/worker/scheduler.js",
+    "test": "node test/notification.logic.test.js && node test/protect.middleware.test.js && node test/seed.integration.test.js",
+    "seed": "node scripts/seed.js",
+    "seed:emulator": "USE_FIREBASE_EMULATOR=1 node scripts/seed.js",
+    "seed:prod": "CONFIRM_SEED=1 node scripts/seed.js",
+    "emulator:run-tests": "bash scripts/run-emulator-and-test.sh"
   },
   "keywords": [],
   "author": "",
@@ -26,5 +32,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "directories": {
+    "test": "test"
   }
 }
