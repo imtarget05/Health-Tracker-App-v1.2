@@ -2,6 +2,7 @@
 import fs from "fs/promises";
 import { firebasePromise, getDb, getBucket } from "../lib/firebase.js";
 import { AI_SERVICE_URL } from "../config/env.js";
+import aiClient from "../services/aiClient.js";
 import {
     handleAiProcessingSuccess,
     handleAiProcessingFailure,
@@ -39,39 +40,32 @@ export const uploadFileController = async (req, res) => {
         // 2. Gọi AI service
         const fileBuffer = await fs.readFile(localPath);
 
-        const aiResponse = await fetch(`${AI_SERVICE_URL}/predict`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/octet-stream",
-            },
-            body: fileBuffer,
-        });
-
-        if (!aiResponse.ok) {
-            const errorText = await aiResponse.text();
-            console.error("AI service error:", errorText);
-
-            // 🔔 Gửi notification thất bại AI (nếu có user)
+        let aiData;
+        try {
+            aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 12000, retries: 2 });
+        } catch (err) {
+            // log and notify user if auth
+            console.error('AI service error:', err?.message || err, err?.raw ? `rawLen=${String(err.raw).slice(0, 200)}` : '');
             if (userId) {
-                await handleAiProcessingFailure({ userId });
+                try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); }
             }
-
-            return res.status(502).json({
-                message: "AI service error",
-                raw: errorText,
-            });
+            return res.status(502).json({ message: 'AI service error', detail: err?.message || 'unknown' });
         }
 
-        const aiData = await aiResponse.json();
-
-        if (!aiData.success || !Array.isArray(aiData.detections) || aiData.detections.length === 0) {
+        // Basic shape validation
+        if (!aiData || typeof aiData !== 'object' || !Array.isArray(aiData.detections)) {
             if (userId) {
-                await handleAiProcessingFailure({ userId });
+                try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); }
             }
+            console.error('AI returned unexpected shape', aiData);
+            return res.status(502).json({ message: 'AI service returned invalid response' });
+        }
 
-            return res.status(400).json({
-                message: "No food detected in image",
-            });
+        if (!aiData.success || aiData.detections.length === 0) {
+            if (userId) {
+                try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); }
+            }
+            return res.status(400).json({ message: 'No food detected in image' });
         }
 
         const detections = aiData.detections || [];

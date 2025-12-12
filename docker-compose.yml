@@ -1,0 +1,48 @@
+version: '3.8'
+services:
+  ai:
+    build:
+      context: ./AI
+      dockerfile: Dockerfile.cpu # or Dockerfile.gpu
+    image: health-ai:local
+    volumes:
+      - ./AI/models:/app/models:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://127.0.0.1:8000/health || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: health-backend:local
+    ports:
+      - "5001:5001"
+    depends_on:
+      ai:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: "5001"
+      AI_SERVICE_URL: "http://ai:8000"
+      USE_FIREBASE_EMULATOR: "1"
+      FIRESTORE_EMULATOR_HOST: "emulator:8080"
+    volumes:
+      - ./backend:/usr/src/app:rw
+
+  # optional: run firebase emulator in a container (uses node + npx firebase-tools)
+  emulator:
+    image: node:18
+    working_dir: /workspace
+    volumes:
+      - ./backend:/workspace:rw
+    command: [ "bash", "-lc", "npm i -g firebase-tools && firebase emulators:start --only firestore --project=demo-project --host 0.0.0.0" ]
+    ports:
+      - "8080:8080"
+      - "4000:4000" # emulator UI
+    environment:
+      FIRESTORE_EMULATOR_HOST: "0.0.0.0:8080"

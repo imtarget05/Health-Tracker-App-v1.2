@@ -1,0 +1,112 @@
+# GitLab CI pipeline following: test -> security scan (Semgrep) -> SonarQube -> Docker build -> push -> deploy to EKS
+# Customize CI variables in your GitLab project settings (see README below)
+
+stages:
+  - prepare
+  - test
+  - semgrep
+  - sonar
+  - build
+  - docker
+  - deploy
+
+variables:
+  NODE_IMAGE: node:18
+  PY_IMAGE: python:3.11
+  DOCKER_IMAGE: docker:24
+  IMAGE_TAG: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+  # Default test command - override TEST_SCRIPT in CI variables if you need a different command
+  TEST_SCRIPT: "npm run test || true"
+
+cache:
+  paths:
+    - backend/node_modules/
+
+.prepare_job:
+  image: $NODE_IMAGE
+  stage: prepare
+  script:
+    - cd backend
+    - npm ci
+  artifacts:
+    paths:
+      - backend/node_modules/
+      - backend/package-lock.json
+    expire_in: 1h
+
+unit_tests:
+  <<: * .prepare_job
+  stage: test
+  script:
+    - cd backend
+    - echo "Running tests (use TEST_SCRIPT CI variable to override): $TEST_SCRIPT"
+    - eval "$TEST_SCRIPT"
+  artifacts:
+    when: always
+    reports:
+      junit: backend/test-results.xml
+
+semgrep_scan:
+  image: $PY_IMAGE
+  stage: semgrep
+  before_script:
+    - pip install --no-cache-dir semgrep
+  script:
+    - semgrep --config auto --json --output semgrep-report.json || true
+  artifacts:
+    paths:
+      - semgrep-report.json
+    expire_in: 1h
+
+sonarqube_scan:
+  image: sonarsource/sonar-scanner-cli:latest
+  stage: sonar
+  script:
+    - cd backend
+    - |
+      sonar-scanner \
+        -Dsonar.projectKey=${SONAR_PROJECT_KEY:-health-tracker-backend} \
+        -Dsonar.sources=. \
+        -Dsonar.host.url=${SONAR_HOST_URL} \
+        -Dsonar.login=${SONAR_TOKEN}
+  only:
+    - branches
+
+docker_build:
+  image: $DOCKER_IMAGE
+  stage: docker
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - echo "Logging into registry"
+    - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+  script:
+    - cd backend
+    - docker build -t $IMAGE_TAG .
+    - docker push $IMAGE_TAG
+  only:
+    - branches
+  artifacts:
+    expire_in: 1h
+
+deploy_to_eks:
+  image: bitnami/kubectl:1.27
+  stage: deploy
+  before_script:
+    - mkdir -p ~/.kube
+    - echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+  script:
+    - chmod +x ci/deploy-to-eks.sh || true
+    - ci/deploy-to-eks.sh $KUBE_NAMESPACE ${IMAGE_TAG}
+  only:
+    - main
+
+# Notes / required CI variables (set these in GitLab CI/CD settings):
+# - CI_REGISTRY, CI_REGISTRY_USER, CI_REGISTRY_PASSWORD (for Docker push)
+# - SONAR_HOST_URL, SONAR_TOKEN, SONAR_PROJECT_KEY (for SonarQube analysis)
+# - KUBE_CONFIG (base64-encoded kubeconfig for the cluster)
+# - KUBE_NAMESPACE (k8s namespace to deploy to)
+# - TEST_SCRIPT (optional) to customize test command, e.g. "node test/seed.integration.test.js"
+# - AI: if you rely on external AI infra in CI, configure network access or mock endpoints

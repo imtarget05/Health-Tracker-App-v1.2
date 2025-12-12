@@ -38,11 +38,29 @@ const initializeFirebase = async () => {
         }
 
         // 🔐 Service account (fix key \n)
+        // DEBUG: inspect FIREBASE_PRIVATE_KEY at runtime
+        try {
+            const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+            console.log('DEBUG: FIREBASE_PRIVATE_KEY type=', typeof rawKey);
+            console.log('DEBUG: FIREBASE_PRIVATE_KEY length=', rawKey ? rawKey.length : 0);
+            console.log('DEBUG: FIREBASE_PRIVATE_KEY contains literal \\n=', rawKey ? rawKey.indexOf('\\n') !== -1 : false);
+            // print a short preview (first/last 60 chars) without exposing full key
+            if (rawKey) {
+                const previewStart = rawKey.slice(0, 60).replace(/\n/g, '\\n');
+                const previewEnd = rawKey.slice(-60).replace(/\n/g, '\\n');
+                console.log('DEBUG: FIREBASE_PRIVATE_KEY preview start=', previewStart);
+                console.log('DEBUG: FIREBASE_PRIVATE_KEY preview end=', previewEnd);
+            }
+        } catch (e) {
+            console.log('DEBUG: error inspecting FIREBASE_PRIVATE_KEY', e?.message || e);
+        }
+
+        // � Service account object (support escaped \n in .env)
         const serviceAccount = {
             type: process.env.FIREBASE_TYPE,
             project_id: process.env.FIREBASE_PROJECT_ID,
             private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-            private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+            private_key: process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n") : undefined,
             client_email: process.env.FIREBASE_CLIENT_EMAIL,
             client_id: process.env.FIREBASE_CLIENT_ID,
             auth_uri: process.env.FIREBASE_AUTH_URI,
@@ -52,7 +70,7 @@ const initializeFirebase = async () => {
             universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN,
         };
 
-        // 🚀 Initialize Firebase Admin SDK
+        // �🚀 Initialize Firebase Admin SDK
         app = admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             storageBucket: process.env.FIREBASE_STORAGE_BUCKET,

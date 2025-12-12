@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# system deps (adjust as needed)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip
+# Install python deps (may include torch CPU wheel; if not, it will install CPU by default)
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# copy app (fastapi)
+COPY . /app
+
+# Do not copy models into image; mount host folder for dev:
+# docker run -v ./AI/models:/app/models ...
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
