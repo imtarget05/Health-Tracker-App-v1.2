@@ -1,3 +1,4 @@
+# sanitized: removed markdown fences; editor diagnostics should be cleared
 name: CI
 
 on:
