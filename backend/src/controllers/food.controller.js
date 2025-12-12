@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import { firebasePromise, getDb } from "../lib/firebase.js";
 import { AI_SERVICE_URL } from "../config/env.js";
+import aiClient from "../services/aiClient.js";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -28,27 +29,22 @@ export const scanFood = async (req, res) => {
 
     localPath = req.file.path;
 
-    // 2. Gọi AI service (BE ↔ AI)
+    // 2. Gọi AI service (BE ← AI) với timeout/retry và parsing an toàn
     const fileBuffer = await fs.readFile(localPath);
 
-    const aiResponse = await fetch(`${AI_SERVICE_URL}/predict`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/octet-stream", // nếu AI dùng form-data thì đổi chỗ này
-      },
-      body: fileBuffer,
-    });
-
-    if (!aiResponse.ok) {
-      const text = await aiResponse.text();
-      console.error("AI service error:", text);
-      return res.status(502).json({
-        message: "AI service error",
-        raw: text,
-      });
+    let aiData;
+    try {
+      aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 12000, retries: 2 });
+    } catch (err) {
+      console.error('AI service error:', err?.message || err, err?.raw ? `rawLen=${String(err.raw).slice(0, 200)}` : '');
+      return res.status(502).json({ message: 'AI service error', detail: err?.message || 'unknown' });
     }
 
-    const aiData = await aiResponse.json();
+    // validate shape
+    if (!aiData || typeof aiData !== 'object' || !Array.isArray(aiData.detections)) {
+      console.error('AI returned unexpected shape', aiData);
+      return res.status(502).json({ message: 'AI service returned invalid response' });
+    }
     // dạng:
     // {
     //   success: true,
