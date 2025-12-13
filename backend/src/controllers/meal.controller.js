@@ -213,7 +213,7 @@ export const createMealFromDetection = async (req, res) => {
             console.error("Error sending calorie warning notification:", notifyErr);
         }
 
-        return res.status(201).json({
+        return res.status(200).json({
             id: mealRef.id,
             ...mealDoc,
         });
