@@ -1,5 +1,7 @@
 // src/controllers/auth.controller.js
 import { firebasePromise, getAuth, getDb } from "../lib/firebase.js";
+import fs from "fs";
+import fetch from "node-fetch";
 import { generateToken } from "../lib/utils.js";
 import { FIREBASE_API_KEY } from "../config/env.js";
 // Helper: build response user object
@@ -50,11 +52,22 @@ const verifyEmailPasswordWithFirebase = async (email, password) => {
 
 // ============= SIGNUP =============
 export const signup = async (req, res) => {
-  const { fullName, email, password } = req.body;
+  let { fullName, email, password } = req.body;
 
   try {
-    if (!fullName || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+    console.log('[signup] payload:', { fullName, email: email && email.replace(/(.{3}).+(@.+)/, '$1***$2') });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // Nếu không có fullName từ FE, tự tạo 1 tên từ email (ví dụ: first part trước @)
+    if (!fullName || String(fullName).trim() === '') {
+      try {
+        fullName = String(email).split('@')[0].replace(/[\._\d]+/g, ' ').trim();
+        if (!fullName) fullName = 'User';
+      } catch (e) {
+        fullName = 'User';
+      }
     }
 
     if (password.length < 6) {
@@ -68,12 +81,29 @@ export const signup = async (req, res) => {
     const auth = getAuth();
     const db = getDb();
 
-    const userRecord = await auth.createUser({
-      email,
-      password,
-      displayName: fullName,
-      emailVerified: false,
-    });
+    let userRecord;
+    try {
+      console.log('[signup] creating auth user for email=', email);
+      userRecord = await auth.createUser({
+        email,
+        password,
+        displayName: fullName,
+        emailVerified: false,
+      });
+      console.log('[signup] auth.createUser succeeded', { uid: userRecord.uid });
+    } catch (e) {
+      const adminCode = e?.code || e?.errorInfo?.code || e?.firebaseCode || e?.message;
+      console.error('[signup] Firebase Auth createUser failed:', { adminCode, message: e?.message || e });
+      // Map common admin errors to friendly responses
+      if (adminCode && (adminCode === 'auth/email-already-exists' || adminCode === 'auth/email_exists')) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+      if (adminCode && adminCode === 'auth/invalid-email') {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+      // fallback
+      return res.status(500).json({ message: 'Failed to create user' });
+    }
 
     // Tạo profile trong Firestore
     const userProfile = {
@@ -85,14 +115,55 @@ export const signup = async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await db.collection("users").doc(userRecord.uid).set(userProfile);
+    try {
+      console.log('[signup] writing user profile to Firestore', { uid: userRecord.uid });
+      await db.collection("users").doc(userRecord.uid).set(userProfile);
+      console.log('[signup] Firestore write succeeded', { uid: userRecord.uid });
+    } catch (e) {
+      console.error('[signup] Firestore write failed:', e?.message || e);
+      // Attempt to cleanup created auth user to avoid orphaned accounts
+      try {
+        await auth.deleteUser(userRecord.uid);
+        console.log('[signup] Rolled back created auth user due to Firestore failure', { uid: userRecord.uid });
+      } catch (delErr) {
+        console.error('[signup] Failed to rollback auth user:', delErr?.message || delErr);
+      }
+      return res.status(500).json({ message: 'Failed to create user profile' });
+    }
 
     // Generate JWT token (set cookie)
-    const token = generateToken(userRecord.uid, res);
+    let token;
+    try {
+      token = generateToken(userRecord.uid, res);
+    } catch (e) {
+      console.error('[signup] Token generation failed:', e?.message || e);
+      // Attempt to cleanup created auth user since token issuance failed
+      try {
+        await auth.deleteUser(userRecord.uid);
+        console.log('[signup] Rolled back created auth user due to token failure', { uid: userRecord.uid });
+      } catch (delErr) {
+        console.error('[signup] Failed to rollback auth user after token failure:', delErr?.message || delErr);
+      }
+      return res.status(500).json({ message: 'Failed to issue token' });
+    }
 
+    console.log('[signup] success', { uid: userRecord.uid });
     return res.status(201).json(buildUserResponse(userProfile, token));
   } catch (error) {
-    console.log("Error in signup controller:", error);
+    console.error("Error in signup controller:", error && (error.stack || error));
+    console.debug('[signup] caught error details:', {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code || error?.firebaseCode,
+    });
+    try {
+      fs.appendFileSync(
+        '/tmp/backend-signup-errors.log',
+        `\n---- ${new Date().toISOString()} ----\n${error && (error.stack || JSON.stringify(error))}\n`
+      );
+    } catch (e) {
+      console.error('Failed to write signup error file', e);
+    }
 
     switch (error.code) {
       case "auth/email-already-exists":
@@ -132,7 +203,12 @@ export const loginWithEmailPassword = async (req, res) => {
 
     return res.status(200).json(buildUserResponse(userProfile, token));
   } catch (error) {
-    console.log("Error in email/password login:", error);
+    console.error("Error in email/password login:", error && (error.stack || error));
+    try {
+      fs.appendFileSync('/tmp/backend-auth-errors.log', `\n---- ${new Date().toISOString()} LOGIN-EMAIL ERROR ----\n${error && (error.stack || JSON.stringify(error))}\n`);
+    } catch (e) {
+      console.error('Failed to write auth error file', e);
+    }
 
     if (error.firebaseCode) {
       switch (error.firebaseCode) {
@@ -160,7 +236,17 @@ export const loginWithToken = async (req, res) => {
       return res.status(400).json({ message: "ID token is required" });
     }
 
-    const decodedToken = await auth.verifyIdToken(idToken);
+    await firebasePromise;
+    const auth = getAuth();
+    console.log('[loginWithToken] received idToken length=', typeof idToken === 'string' ? idToken.length : 0);
+    let decodedToken;
+    try {
+      decodedToken = await auth.verifyIdToken(idToken);
+      console.log('[loginWithToken] verifyIdToken succeeded', { uid: decodedToken.uid });
+    } catch (vdErr) {
+      console.error('[loginWithToken] verifyIdToken failed:', vdErr?.message || vdErr);
+      throw vdErr;
+    }
     const uid = decodedToken.uid;
 
     const userProfile = await getUserProfileByUid(uid);
@@ -172,7 +258,12 @@ export const loginWithToken = async (req, res) => {
 
     return res.status(200).json(buildUserResponse(userProfile, token));
   } catch (error) {
-    console.log("Error in login with token:", error);
+    console.error("Error in login with token:", error && (error.stack || error));
+    try {
+      fs.appendFileSync('/tmp/backend-auth-errors.log', `\n---- ${new Date().toISOString()} LOGIN-TOKEN ERROR ----\n${error && (error.stack || JSON.stringify(error))}\n`);
+    } catch (e) {
+      console.error('Failed to write auth error file', e);
+    }
 
     switch (error.code) {
       case "auth/id-token-expired":
@@ -201,6 +292,10 @@ export const updateProfile = async (req, res) => {
     }
 
     // Update fullname
+    await firebasePromise;
+    const auth = getAuth();
+    const db = getDb();
+
     if (fullName) {
       updateData.fullName = fullName;
       await auth.updateUser(userId, { displayName: fullName });
@@ -262,6 +357,8 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
+    await firebasePromise;
+    const auth = getAuth();
     const resetLink = await auth.generatePasswordResetLink(email);
 
     // TODO: gửi email thật sự bằng service (SendGrid, Nodemailer, ...)

@@ -19,3 +19,38 @@ Helper script `ci/deploy-to-eks.sh` patches the deployment image (expects deploy
 
 Before enabling the pipeline, set the CI variables in GitLab and ensure the runner has Docker-in-Docker support for the docker build job.
 
+# Health Tracker App - Monorepo Setup
+
+## Prerequisites
+- Docker and Docker Compose
+- For local (non-Docker) dev: Node.js 18+, Flutter SDK, Python 3.11+
+
+## Quick Start (Docker Compose)
+1. Copy required envs:
+   - backend/.env (see backend/.env.example)
+   - frontend/.env (see frontend/.env.example)
+2. Start services:
+   - docker compose up --build
+3. Services:
+   - Backend: http://localhost:8080
+   - AI Service: http://localhost:5000
+   - Frontend: http://localhost:3000
+
+## Local Development
+- Backend:
+  - cd backend
+  - npm i
+  - npm run dev
+- AI:
+  - cd AI
+  - pip install -r requirements.txt
+  - python main.py
+- Frontend:
+  - cd frontend
+  - flutter run
+
+## Notes
+- Ensure frontend BACKEND_URL points to backend.
+- AI service ports and model mounts configured in docker-compose.
+- See backend/k8s for deployment templates.
+

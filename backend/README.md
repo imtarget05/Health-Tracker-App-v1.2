@@ -215,3 +215,29 @@ npm run seed:emulator
 CONFIRM_SEED=1 npm run seed:prod
 ```
 
+## Register user (example)
+
+To register a new user in Firebase via the backend API (creates Firebase Auth user + Firestore profile):
+
+1. Ensure your `backend/.env` has the Firebase service account values populated (see `.env.example`). If you paste the private key into the env file, escape newlines as `\n`.
+
+2. Start the server in development (disable schedulers):
+
+```bash
+cd backend
+DISABLE_SCHEDULER=1 npm run dev
+```
+
+3. Create a user with curl:
+
+```bash
+curl -v -X POST http://127.0.0.1:5001/auth/register \
+	-H "Content-Type: application/json" \
+	-d '{"fullName":"Test User","email":"you+test@example.com","password":"Password123"}'
+```
+
+Response: 201 with user object and JWT cookie set on the response (in development cookie may be http-only). If you see errors about missing env vars, double-check `.env` contents.
+
+If you want to avoid using a real Firebase project during local development, configure the Firebase Emulator and set `USE_FIREBASE_EMULATOR=1` in `.env` before starting the server.
+
+
