@@ -56,4 +56,9 @@ router.get("/google/test", (req, res) => {
     });
 });
 
+// Quick test endpoint to verify auth route + server wiring
+router.get('/test', (req, res) => {
+    res.json({ message: 'Auth route is healthy' });
+});
+
 export default router;

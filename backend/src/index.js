@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 
 import mealRoutes from "./routes/meal.route.js";
 import waterRoutes from "./routes/water.route.js";
@@ -19,9 +20,21 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:5001,http://127.0.0.1:5001").split(",").map(s => s.trim());
 
 app.use(express.json());
 app.use(cookieParser());
+
+// CORS for frontend web/app during development
+app.use(cors({
+    origin: (origin, cb) => {
+        // Allow no-origin (mobile apps, curl) and configured origins
+        if (!origin || ORIGINS.includes(origin)) return cb(null, true);
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        return cb(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+}));
 
 // Quick request/response logger for debugging
 app.use((req, res, next) => {
@@ -132,6 +145,7 @@ const startServer = async () => {
         app.listen(PORT, () => {
             console.log("🚀 Server is running on port:", PORT);
             console.log("🗄  Using Firebase Firestore for database");
+            console.log("🔓 CORS origins:", ORIGINS);
         });
     } catch (error) {
         console.error("❌ Failed to initialize Firebase. Server not started.", error);
