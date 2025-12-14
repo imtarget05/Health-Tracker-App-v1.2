@@ -37,7 +37,7 @@ export const createWaterLog = async (req, res) => {
             updatedAt: nowIso,
         });
 
-    return res.status(200).json({
+        return res.status(200).json({
             id: docRef.id,
             userId,
             date: logDate,

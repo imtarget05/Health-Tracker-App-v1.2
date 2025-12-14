@@ -147,8 +147,8 @@ export const signup = async (req, res) => {
       return res.status(500).json({ message: 'Failed to issue token' });
     }
 
-  console.log('[signup] success', { uid: userRecord.uid });
-  return res.status(200).json(buildUserResponse(userProfile, token));
+    console.log('[signup] success', { uid: userRecord.uid });
+    return res.status(200).json(buildUserResponse(userProfile, token));
   } catch (error) {
     console.error("Error in signup controller:", error && (error.stack || error));
     console.debug('[signup] caught error details:', {

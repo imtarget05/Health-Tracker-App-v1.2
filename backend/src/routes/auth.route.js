@@ -10,7 +10,7 @@ import {
     resetPassword,
     loginWithEmailPassword,
 } from "../controllers/auth.controller.js";
-import { facebookAuth, googleAuth } from "../controllers/oauth.controller.js";
+import { facebookAuth, googleAuth, facebookDebug, createTestUser } from "../controllers/oauth.controller.js";
 import { protectRoute } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -39,7 +39,10 @@ router.post("/reset-password", resetPassword);     // POST /auth/reset-password
 
 // ===== OAuth =====
 router.post("/facebook", facebookAuth);            // POST /auth/facebook
+router.post("/facebook/debug", facebookDebug);    // POST /auth/facebook/debug (dev)
 router.post("/google", googleAuth);                // POST /auth/google
+// Dev-only test endpoint to create/get a user
+router.post('/create-test-user', createTestUser);
 
 // ===== Test endpoints (dev) =====
 router.get("/facebook/test", (req, res) => {
