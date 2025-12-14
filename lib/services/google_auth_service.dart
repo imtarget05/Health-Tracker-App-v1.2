@@ -2,6 +2,11 @@ import 'dart:convert';
 
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../firebase_options.dart';
+import '../fitness_app/flutter_login/register.dart' as _reg; // keep available for init ordering
 
 /// Simple Google Sign-In -> Backend helper
 ///
@@ -27,18 +32,70 @@ class GoogleAuthService {
     if (idToken == null) {
       throw Exception('Failed to obtain Google idToken');
     }
+    // Ensure Firebase client initialized (Register/Login pages already init but be defensive)
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      }
+    } catch (_) {}
+
+    // Sign in to Firebase using Google credentials to ensure a Firebase user exists
+    final credential = GoogleAuthProvider.credential(idToken: idToken, accessToken: googleAuth.accessToken);
+    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+
+    // Ensure Firestore profile exists (client-side) so app has immediate profile
+    try {
+      final db = FirebaseFirestore.instance;
+      final uid = userCred.user?.uid;
+      if (uid != null) {
+        final userDoc = db.collection('users').doc(uid);
+        final snap = await userDoc.get();
+        if (!snap.exists) {
+          final profile = {
+            'uid': uid,
+            'email': userCred.user?.email ?? account.email,
+            'fullName': userCred.user?.displayName ?? account.displayName ?? '',
+            'profilePic': userCred.user?.photoURL ?? account.photoUrl ?? '',
+            'createdAt': DateTime.now().toIso8601String(),
+            'updatedAt': DateTime.now().toIso8601String(),
+            'provider': 'google',
+            'providerId': userCred.user?.uid,
+          };
+          await userDoc.set(profile);
+        }
+      }
+    } catch (e) {
+      // non-fatal: log and continue to backend login step
+      // ignore: avoid_print
+      print('GoogleAuthService: failed to create client-side Firestore profile: $e');
+    }
+
+    // Get Firebase ID token and send to backend login endpoint to get backend JWT
+    final firebaseIdToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (firebaseIdToken == null) throw Exception('Failed to get Firebase idToken after sign-in');
 
     final resp = await http.post(
-      Uri.parse('$backendBaseUrl/auth/google'),
+      Uri.parse('$backendBaseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'idToken': idToken}),
+      body: jsonEncode({'idToken': firebaseIdToken}),
     );
 
-    if (resp.statusCode == 200) {
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
 
-    throw Exception('Backend Google auth failed: ${resp.statusCode} ${resp.body}');
+    // If backend login fails, still return local user info to let app continue
+    try {
+      final local = {
+        'token': null,
+        'uid': FirebaseAuth.instance.currentUser?.uid,
+        'email': FirebaseAuth.instance.currentUser?.email,
+        'fullName': FirebaseAuth.instance.currentUser?.displayName,
+      };
+      return local;
+    } catch (_) {
+      throw Exception('Backend Google auth failed: ${resp.statusCode} ${resp.body}');
+    }
   }
 
   /// Optional: sign out from Google on device

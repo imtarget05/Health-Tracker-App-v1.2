@@ -5,6 +5,8 @@ import 'package:best_flutter_ui_templates/fitness_app/ui_view/workout_view.dart'
 import 'package:flutter/material.dart';
 
 import '../fitness_app_theme.dart';
+// Import LoginPage for logout navigation
+import '../flutter_login/login.dart';
 
 import 'package:best_flutter_ui_templates/fitness_app/profile/widgets/profile_goals.dart';
 import 'package:best_flutter_ui_templates/fitness_app/profile/widgets/profile_header.dart';
@@ -209,8 +211,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             top: 16 - 8.0 * topBarOpacity,
                             bottom: 12 - 8.0 * topBarOpacity),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: <Widget>[
+                            // Title left-aligned
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
@@ -226,6 +228,37 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   ),
                                 ),
                               ),
+                            ),
+                            // Persistent logout button on the right
+                            IconButton(
+                              icon: const Icon(Icons.logout),
+                              color: FitnessAppTheme.darkerText,
+                              onPressed: () async {
+                                final shouldLogout = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Confirm Logout'),
+                                    content: const Text('Are you sure you want to logout?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(true),
+                                        child: const Text('Logout'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (shouldLogout == true) {
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                                        (route) => false,
+                                  );
+                                }
+                              },
                             ),
                           ],
                         ),

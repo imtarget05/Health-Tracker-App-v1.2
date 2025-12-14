@@ -4,6 +4,13 @@ import './resetpassword.dart';
 import './dashboard.dart';
 
 import '../welcome/onboarding_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../firebase_options.dart';
+import '../../services/backend_api.dart';
+import '../../services/auth_storage.dart';
+import '../../services/google_auth_service.dart';
+import '../../services/facebook_auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   final String? title;
@@ -19,7 +26,34 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _passCtrl = TextEditingController();
 
+  bool _obscurePassword = true;
+
   bool _isLoading = false;
+  bool _firebaseReady = false;
+  String? _firebaseInitError;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureFirebaseInitialized();
+  }
+
+  Future<void> _ensureFirebaseInitialized() async {
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      }
+      setState(() {
+        _firebaseReady = true;
+        _firebaseInitError = null;
+      });
+    } catch (e) {
+      setState(() {
+        _firebaseReady = false;
+        _firebaseInitError = e.toString();
+      });
+    }
+  }
 
   Widget get _logo => Center(
     child: Hero(
@@ -27,27 +61,30 @@ class _LoginPageState extends State<LoginPage> {
       child: CircleAvatar(
         backgroundColor: Colors.transparent,
         radius: 100,
-        child: Image.asset('assets/images/logo.png'),
+        child: Image.asset('assets/images/doctor.png'),
       ),
     ),
   );
 
   Widget get _userNameField => TextFormField(
     controller: _emailCtrl,
+    keyboardType: TextInputType.emailAddress,
     validator: (value) {
-      if (value == null || value.isEmpty) {
-        return "Please enter a valid email";
-      }
+      final v = value?.trim() ?? '';
+      if (v.isEmpty) return 'Please enter email';
+      final emailRegex = RegExp(r"^[^@\s]+@[^@\s]+\.[^@\s]+");
+      if (!emailRegex.hasMatch(v)) return 'Please enter a valid email';
       return null;
     },
     decoration: const InputDecoration(
-        labelText: "EMAIL",
-        labelStyle: TextStyle(fontWeight: FontWeight.bold)),
+      labelText: "EMAIL",
+      labelStyle: TextStyle(fontWeight: FontWeight.bold),
+    ),
   );
 
   Widget get _passwordField => TextFormField(
     controller: _passCtrl,
-    obscureText: true,
+    obscureText: _obscurePassword,
     validator: (value) {
       if (value == null || value.isEmpty) {
         return "Please enter the password";
@@ -56,9 +93,14 @@ class _LoginPageState extends State<LoginPage> {
       }
       return null;
     },
-    decoration: const InputDecoration(
+    decoration: InputDecoration(
         labelText: "PASSWORD",
-        labelStyle: TextStyle(fontWeight: FontWeight.bold)),
+        labelStyle: TextStyle(fontWeight: FontWeight.bold),
+        suffixIcon: IconButton(
+          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+        )
+    ),
   );
 
   Widget get _forgotPassword => Container(
@@ -88,17 +130,58 @@ class _LoginPageState extends State<LoginPage> {
           backgroundColor: Colors.blue,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20))),
-      onPressed: () async {
+    onPressed: (!_firebaseReady || _isLoading)
+      ? null
+      : () async {
         if (!_formKey.currentState!.validate()) return;
 
         setState(() => _isLoading = true);
 
-        await Future.delayed(const Duration(seconds: 1));
+        try {
+          // Ensure Firebase initialized
+          if (Firebase.apps.isEmpty) {
+            try {
+              await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+            } catch (initErr) {
+              setState(() => _isLoading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Firebase init failed: $initErr')),
+              );
+              return;
+            }
+          }
+          // Sign in with Firebase Auth
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: _emailCtrl.text.trim(),
+            password: _passCtrl.text,
+          );
 
-        setState(() => _isLoading = false);
+          // Get ID token
+          String? idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+          if (idToken == null) throw Exception('Failed to get ID token');
 
-        Navigator.push(
-            context, MaterialPageRoute(builder: (_) => OnboardingScreen()));
+          // Send to backend and capture returned backend JWT
+          final backendResp = await BackendApi.loginWithIdToken(idToken: idToken);
+          final backendToken = backendResp['token'] as String?;
+          if (backendToken != null) {
+            // store token for subsequent API calls
+            // use in-memory storage for now; consider secure storage for production
+            AuthStorage.saveToken(backendToken);
+          }
+
+          // Navigate to dashboard
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => OnboardingScreen()),
+          );
+        } catch (e) {
+          final msg = e is Exception ? e.toString() : 'Login failed';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+        } finally {
+          setState(() => _isLoading = false);
+        }
       },
       child: _isLoading
           ? const CircularProgressIndicator(color: Colors.white)
@@ -128,31 +211,108 @@ class _LoginPageState extends State<LoginPage> {
               _passwordField,
               const SizedBox(height: 20),
               _forgotPassword,
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
               _loginButton,
+              const SizedBox(height: 16),
+              // Social login buttons (responsive)
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: (!_firebaseReady || _isLoading)
+                        ? null
+                        : () async {
+                            setState(() => _isLoading = true);
+                            try {
+                              final svc = GoogleAuthService();
+                              final backendBase = BackendApi.baseUrl;
+                              final result = await svc.signInToBackend(backendBase);
+                              if (result != null) {
+                                final token = result['token'] as String?;
+                                if (token != null) {
+                                  AuthStorage.saveToken(token);
+                                }
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => OnboardingScreen()),
+                                );
+                              }
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google sign-in failed: $e')));
+                            } finally {
+                              setState(() => _isLoading = false);
+                            }
+                          },
+                    icon: Image.asset('assets/images/google_logo.png', width: 20, height: 20, errorBuilder: (c,e,s) => const Icon(Icons.g_mobiledata)),
+                    label: const Text('Google'),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      side: const BorderSide(color: Colors.grey),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      minimumSize: const Size(140, 44),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: (!_firebaseReady || _isLoading)
+                        ? null
+                        : () async {
+                            setState(() => _isLoading = true);
+                            try {
+                              final svc = FacebookAuthService();
+                              final backendBase = BackendApi.baseUrl;
+                              final result = await svc.signInToBackend(backendBase);
+                              if (result != null) {
+                                final token = result['token'] as String?;
+                                if (token != null) {
+                                  AuthStorage.saveToken(token);
+                                }
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => OnboardingScreen()),
+                                );
+                              }
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Facebook sign-in failed: $e')));
+                            } finally {
+                              setState(() => _isLoading = false);
+                            }
+                          },
+                    icon: Image.asset('assets/images/facebook_logo.png', width: 20, height: 20, errorBuilder: (c,e,s) => const Icon(Icons.facebook)),
+                    label: const Text('Facebook'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1877F2),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      minimumSize: const Size(140, 44),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("New to CRM? "),
-                  InkWell(
-                    onTap: () {
+                  const Text("New to Account? "),
+                  TextButton(
+                    onPressed: () {
                       Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) =>
-                                  RegisterPage(title: "Register")));
+                              builder: (_) => RegisterPage(title: 'Register')));
                     },
                     child: const Text(
-                      "Register",
+                      "Create a new account",
                       style: TextStyle(
-                          color: Colors.blue,
                           fontWeight: FontWeight.bold,
+                          color: Colors.blue,
                           decoration: TextDecoration.underline),
                     ),
                   ),
                 ],
-              )
+              ),
             ],
           ),
         ),

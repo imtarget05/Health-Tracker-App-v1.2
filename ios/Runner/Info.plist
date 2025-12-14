@@ -49,5 +49,44 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>google</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.googleusercontent.apps.484752358530-rcv2nggm1ari9rhmojl2v27i1fv0eguh</string>
+				</array>
+			</dict>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>facebook</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>fb877011988117553</string>
+				</array>
+			</dict>
+		</array>
+		
+		<!-- Facebook SDK configuration: replace placeholders with your app values -->
+		<key>FacebookAppID</key>
+		<string>877011988117553</string>
+		<!-- Optional: Facebook client token. Replace with actual client token from Facebook app settings if your app requires it -->
+		<key>FacebookClientToken</key>
+		<string>EAAMdo0QDZBDEBQI5CNCWZBZA3sYI4A6r8q5lQWpRpGTO1B4ovkSFe1WhEzLYZAfzOLoQSOyrqMjOe0ZA2tZBFDsgboLkgipKuuof37baO2XhahMSn0w1cnLfkGxWOhjJiks2V0fdHKRCs0bIKvqor0KCzf6nqdM4quKbprZAfm97vkSYGNTXy9KnbYPmI7h5pH7Mx4oCJOicKw0QrvD0VnIjhW8YJ6RCuHvoQZDZD</string>
+		<key>FacebookDisplayName</key>
+		<string>Healthy-tracker-target</string>
+		
+		<!-- Allow the Facebook app and browser flows to be queried/opened -->
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>fbapi</string>
+			<string>fbauth2</string>
+			<string>fb-messenger-api</string>
+			<string>fb-messenger-share-api</string>
+			<string>fbauth</string>
+			<string>fbshareextension</string>
+		</array>
 	</dict>
 </plist>
