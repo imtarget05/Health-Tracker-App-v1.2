@@ -5,6 +5,8 @@ dotenv.config();
 const REQUIRED_ENV_VARS = [
     "FIREBASE_API_KEY",
     "GOOGLE_CLIENT_ID",
+    "FACEBOOK_APP_ID",
+    "FACEBOOK_APP_SECRET",
     "JWT_SECRET",
     "AI_SERVICE_URL",
     "AI_CHAT_API_KEY",
@@ -21,6 +23,8 @@ if (missing.length > 0) {
 
 export const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY;
 export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+export const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID;
+export const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 export const JWT_SECRET = process.env.JWT_SECRET;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
