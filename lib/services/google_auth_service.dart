@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,6 +20,9 @@ import '../fitness_app/flutter_login/register.dart' as _reg; // keep available f
 class GoogleAuthService {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
+    // On web, the plugin reads the client id from the meta tag. Passing the
+    // clientId explicitly here ensures sign-in works when building for web.
+    clientId: kIsWeb ? '484752358530-rcv2nggm1ari9rhmojl2v27i1fv0eguh.apps.googleusercontent.com' : null,
   );
 
   /// Sign in with Google and send Google ID token to backend `/auth/google`.

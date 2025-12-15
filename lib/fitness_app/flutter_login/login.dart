@@ -11,6 +11,8 @@ import '../../services/backend_api.dart';
 import '../../services/auth_storage.dart';
 import '../../services/google_auth_service.dart';
 import '../../services/facebook_auth_service.dart';
+import '../profile/edit_profile.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginPage extends StatefulWidget {
   final String? title;
@@ -169,11 +171,8 @@ class _LoginPageState extends State<LoginPage> {
             AuthStorage.saveToken(backendToken);
           }
 
-          // Navigate to dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => OnboardingScreen()),
-          );
+          // Ensure profile completeness then navigate
+          await _ensureProfileCompletedAndNavigate(context);
         } catch (e) {
           final msg = e is Exception ? e.toString() : 'Login failed';
           ScaffoldMessenger.of(context).showSnackBar(
@@ -234,10 +233,7 @@ class _LoginPageState extends State<LoginPage> {
                                 if (token != null) {
                                   AuthStorage.saveToken(token);
                                 }
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => OnboardingScreen()),
-                                );
+                                await _ensureProfileCompletedAndNavigate(context);
                               }
                             } catch (e) {
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google sign-in failed: $e')));
@@ -269,10 +265,7 @@ class _LoginPageState extends State<LoginPage> {
                                 if (token != null) {
                                   AuthStorage.saveToken(token);
                                 }
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => OnboardingScreen()),
-                                );
+                                await _ensureProfileCompletedAndNavigate(context);
                               }
                             } catch (e) {
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Facebook sign-in failed: $e')));
@@ -319,4 +312,56 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+}
+
+// Helper placed after the LoginPage class to reuse imports
+Future<void> _ensureProfileCompletedAndNavigate(BuildContext context) async {
+  // This can only be called when FirebaseAuth.currentUser is non-null
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+  final data = doc.data() ?? {};
+
+  // Check multiple locations for a name/email to consider profile complete
+  String? resolveName(Map<String, dynamic> d) {
+    final candidates = [
+      d['fullName'],
+      d['displayName'],
+      d['name'],
+    ];
+    for (final c in candidates) {
+      if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+    }
+    // nested profile map
+    final p = d['profile'];
+    if (p is Map<String, dynamic>) {
+      final pc = [p['fullName'], p['displayName'], p['name']];
+      for (final c in pc) {
+        if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+      }
+    }
+    return null;
+  }
+
+  final hasName = resolveName(data) != null;
+
+  // If profile missing, open EditProfilePage; if user cancels, remain on Login screen
+  if (!hasName) {
+    final nav = Navigator.of(context);
+    final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
+    if (saved == true) {
+      // reload doc and continue
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      // navigate into app
+      nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+    } else {
+      // user cancelled: do not auto-navigate into app
+      return;
+    }
+    return;
+  }
+
+  // profile exists: go straight into app
+  Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
 }

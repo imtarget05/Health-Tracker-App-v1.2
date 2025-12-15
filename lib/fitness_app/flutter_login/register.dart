@@ -7,6 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import '../../firebase_options.dart';
 import '../../services/google_auth_service.dart';
 import '../../services/facebook_auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../profile/edit_profile.dart';
 import '../welcome/onboarding_screen.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -106,16 +108,64 @@ class _RegisterPageState extends State<RegisterPage> {
         password: password,
       );
 
+      // After sign-in, ensure the user completes profile once if missing
       Navigator.of(context).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đăng ký thành công')),
-      );
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OnboardingScreen()));
+        return;
+      }
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => OnboardingScreen()),
-      );
+      // Check firestore for existing profile info
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final data = doc.data() ?? {};
+
+      String? resolveName(Map<String, dynamic> d) {
+        final candidates = [d['fullName'], d['displayName'], d['name']];
+        for (final c in candidates) {
+          if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+        }
+        final p = d['profile'];
+        if (p is Map<String, dynamic>) {
+          final pc = [p['fullName'], p['displayName'], p['name']];
+          for (final c in pc) {
+            if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+          }
+        }
+        return null;
+      }
+
+      if (resolveName(data) == null) {
+        // Force the user to complete profile. If they cancel, ask to retry or logout.
+        bool completed = false;
+        while (!completed) {
+          final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
+          if (saved == true) {
+            completed = true;
+            break;
+          }
+          final choice = await showDialog<bool>(
+            context: context,
+            builder: (c) => AlertDialog(
+              title: const Text('Yêu cầu hoàn thành hồ sơ'),
+              content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
+                TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
+              ],
+            ),
+          );
+          if (choice == false) {
+            await FirebaseAuth.instance.signOut();
+            return;
+          }
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OnboardingScreen()));
     } on FirebaseAuthException catch (e) {
       Navigator.of(context).pop();
       String errorMsg = 'Đăng ký thất bại';
@@ -261,59 +311,6 @@ class _RegisterPageState extends State<RegisterPage> {
                             )
                           ],
                         ),
-                        const SizedBox(height: 12),
-                          const SizedBox(height: 16),
-                          // Social signup buttons (reuse same backend flows)
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 12,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: () async {
-                                  showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-                                  try {
-                                    final svc = GoogleAuthService();
-                                    final backendBase = BackendApi.baseUrl;
-                                    final res = await svc.signInToBackend(backendBase);
-                                    if (res != null) {
-                                      final token = res['token'] as String?;
-                                      if (token != null) AuthStorage.saveToken(token);
-                                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OnboardingScreen()));
-                                    }
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google sign-up failed: $e')));
-                                  } finally {
-                                    Navigator.of(context).pop();
-                                  }
-                                },
-                                icon: Image.asset('assets/images/google_logo.png', width: 20, height: 20, errorBuilder: (c,e,s) => const Icon(Icons.g_mobiledata)),
-                                label: const Text('Google'),
-                                style: OutlinedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, side: const BorderSide(color: Colors.grey), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), minimumSize: const Size(140, 44)),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () async {
-                                  showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-                                  try {
-                                    final svc = FacebookAuthService();
-                                    final backendBase = BackendApi.baseUrl;
-                                    final res = await svc.signInToBackend(backendBase);
-                                    if (res != null) {
-                                      final token = res['token'] as String?;
-                                      if (token != null) AuthStorage.saveToken(token);
-                                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OnboardingScreen()));
-                                    }
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Facebook sign-up failed: $e')));
-                                  } finally {
-                                    Navigator.of(context).pop();
-                                  }
-                                },
-                                icon: Image.asset('assets/images/facebook_logo.png', width: 20, height: 20, errorBuilder: (c,e,s) => const Icon(Icons.facebook)),
-                                label: const Text('Facebook'),
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1877F2), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10), minimumSize: const Size(140, 44)),
-                              ),
-                            ],
-                          ),
                       ],
                     ),
                   ),

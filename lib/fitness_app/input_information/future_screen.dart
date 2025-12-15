@@ -5,6 +5,7 @@ import '../ui_view/input_view.dart';
 import '../input_information/welcome_screen.dart';
 import '../fitness_app_home_screen.dart';
 import '../input_information/habit_screen.dart';
+import '../../services/profile_sync_service.dart';
 
 class FutureScreen extends StatefulWidget {
   const FutureScreen({Key? key}) : super(key: key);
@@ -24,6 +25,8 @@ class _FutureScreenState extends State<FutureScreen>
   double topBarOpacity = 0.0;
 
   DateTime selectedDate = DateTime.now();
+  final TextEditingController idealWeightController = TextEditingController();
+  final TextEditingController deadlineController = TextEditingController();
 
   @override
   void initState() {
@@ -39,7 +42,7 @@ class _FutureScreenState extends State<FutureScreen>
       ),
     );
 
-    addAllListData();
+  addAllListData();
 
     scrollController.addListener(() {
       if (scrollController.offset >= 24) {
@@ -67,6 +70,15 @@ class _FutureScreenState extends State<FutureScreen>
     super.initState();
   }
 
+  @override
+  void dispose() {
+    idealWeightController.dispose();
+    deadlineController.dispose();
+    animationController.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
   void addAllListData() {
     const int count = 4;
     listViews.add(
@@ -79,9 +91,10 @@ class _FutureScreenState extends State<FutureScreen>
         ),
         animationController: animationController!,
         title: "Your Ideal Weight",
-        hint: "Enter your ideal weight...",
-        controller: TextEditingController(),
-        isNumber: false,
+  hint: "Enter your ideal weight...",
+  controller: idealWeightController,
+  isNumber: true,
+  suffixText: 'kg',
       ),
     );
 
@@ -96,8 +109,22 @@ class _FutureScreenState extends State<FutureScreen>
         animationController: animationController!,
         title: "Your Deadline",
         hint: "Enter your Deadline...",
-        controller: TextEditingController(),
-        isNumber: true,
+        controller: deadlineController,
+        isNumber: false,
+        readOnly: true,
+        onTap: () async {
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: selectedDate,
+            firstDate: DateTime.now(),
+            lastDate: DateTime.now().add(Duration(days: 365 * 5)),
+          );
+          if (picked != null) {
+            selectedDate = picked;
+            deadlineController.text = '${picked.year}-${picked.month.toString().padLeft(2,'0')}-${picked.day.toString().padLeft(2,'0')}';
+            setState((){});
+          }
+        },
       ),
     );
 
@@ -141,6 +168,13 @@ class _FutureScreenState extends State<FutureScreen>
                   ),
                   ElevatedButton(
                     onPressed: () {
+                      final data = {
+                        'profile': {
+                          'idealWeightKg': idealWeightController.text.isNotEmpty ? int.tryParse(idealWeightController.text) : null,
+                          'deadline': deadlineController.text,
+                        }
+                      };
+                      ProfileSyncService.instance.saveProfilePartial(data);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => HabitScreen()),

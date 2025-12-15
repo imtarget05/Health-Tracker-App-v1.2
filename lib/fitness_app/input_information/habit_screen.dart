@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../firebase_options.dart';
 
 import '../fitness_app_theme.dart';
 import '../ui_view/input_view.dart';
@@ -23,6 +28,9 @@ class _HabitScreenState extends State<HabitScreen>
   double topBarOpacity = 0.0;
 
   DateTime selectedDate = DateTime.now();
+  final TextEditingController sleepController = TextEditingController();
+  final TextEditingController exerciseController = TextEditingController();
+  final TextEditingController waterController = TextEditingController();
 
   @override
   void initState() {
@@ -66,8 +74,19 @@ class _HabitScreenState extends State<HabitScreen>
     super.initState();
   }
 
+  @override
+  void dispose() {
+    sleepController.dispose();
+    exerciseController.dispose();
+    waterController.dispose();
+    animationController.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
   void addAllListData() {
     const int count = 4;
+    // Sleep hours: open a slider bottom sheet to pick hours (0-12)
     listViews.add(
       InputView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -79,11 +98,56 @@ class _HabitScreenState extends State<HabitScreen>
         animationController: animationController!,
         title: "How Many Hours Do You Sleep A Day?",
         hint: "Enter your sleep time...",
-        controller: TextEditingController(),
+        controller: sleepController,
         isNumber: false,
+        readOnly: true,
+        onTap: () async {
+          double value = 8.0;
+          try {
+            value = double.parse(sleepController.text);
+          } catch (_) {}
+          await showModalBottomSheet(
+            context: context,
+            builder: (ctx) {
+              return StatefulBuilder(builder: (ctx2, setState2) {
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Select sleep hours', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Slider(
+                        min: 0,
+                        max: 12,
+                        divisions: 24,
+                        value: value,
+                        label: '${value.toStringAsFixed(1)} h',
+                        onChanged: (v) => setState2(() => value = v),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('${value.toStringAsFixed(1)} hours'),
+                          ElevatedButton(
+                            onPressed: () {
+                              sleepController.text = value.toStringAsFixed(1);
+                              Navigator.of(ctx).pop();
+                            },
+                            child: Text('Confirm'),
+                          )
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              });
+            },
+          );
+        },
       ),
     );
 
+    // Exercise: open choices modal allowing custom input
     listViews.add(
       InputView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -95,11 +159,70 @@ class _HabitScreenState extends State<HabitScreen>
         animationController: animationController!,
         title: "Your Favourite Exercise",
         hint: "Enter your exercise...",
-        controller: TextEditingController(),
-        isNumber: true,
+        controller: exerciseController,
+        isNumber: false,
+        readOnly: true,
+        onTap: () async {
+          final options = ['Running', 'Cycling', 'Swimming', 'Gym', 'Yoga', 'Other'];
+          String? selected = exerciseController.text.isNotEmpty ? exerciseController.text : null;
+          await showModalBottomSheet(
+            context: context,
+            builder: (ctx) {
+              return StatefulBuilder(builder: (ctx2, setState2) {
+                String custom = '';
+                return Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Select your favourite exercise', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ...options.map((o) => RadioListTile<String>(
+                        title: Text(o),
+                        value: o,
+                        groupValue: selected,
+                        onChanged: (v) {
+                          if (v == null) return;
+                          if (v == 'Other') {
+                            // show dialog to input custom
+                            showDialog(
+                              context: ctx2,
+                              builder: (dctx) {
+                                return AlertDialog(
+                                  title: Text('Enter custom exercise'),
+                                  content: TextField(
+                                    onChanged: (t) => custom = t,
+                                  ),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.of(dctx).pop(), child: Text('Cancel')),
+                                    TextButton(onPressed: () {
+                                      if (custom.trim().isNotEmpty) {
+                                        exerciseController.text = custom.trim();
+                                        Navigator.of(dctx).pop();
+                                        Navigator.of(ctx).pop();
+                                      }
+                                    }, child: Text('OK')),
+                                  ],
+                                );
+                              }
+                            );
+                          } else {
+                            setState2(() => selected = v);
+                            exerciseController.text = v;
+                            Navigator.of(ctx).pop();
+                          }
+                        },
+                      )),
+                    ],
+                  ),
+                );
+              });
+            },
+          );
+        },
       ),
     );
 
+    // Water: numeric input with unit suffix (ml)
     listViews.add(
       InputView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -110,9 +233,10 @@ class _HabitScreenState extends State<HabitScreen>
         ),
         animationController: animationController!,
         title: "How Much Water Do You Drink A Day?",
-        hint: "Enter your amount of water...",
-        controller: TextEditingController(),
-        isNumber: true,
+  hint: "Enter your amount of water...",
+  controller: waterController,
+  isNumber: true,
+  suffixText: 'ml',
       ),
     );
 
@@ -155,11 +279,66 @@ class _HabitScreenState extends State<HabitScreen>
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()),
-                      );
+                    onPressed: () async {
+                      // validate
+                      final sleep = double.tryParse(sleepController.text);
+                      final water = int.tryParse(waterController.text);
+                      final exercise = exerciseController.text.trim();
+
+                      if (sleep == null || sleep < 0 || sleep > 24) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please choose a valid sleep hours (0-24).')));
+                        return;
+                      }
+                      if (exercise.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please select your favourite exercise.')));
+                        return;
+                      }
+                      if (water == null || water <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Please enter amount of water in ml.')));
+                        return;
+                      }
+
+                      showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
+
+                      try {
+                        if (Firebase.apps.isEmpty) {
+                          await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+                        }
+
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Not signed in to Firebase.')));
+                          return;
+                        }
+
+                        final db = FirebaseFirestore.instance;
+                        final uid = user.uid;
+                        final doc = db.collection('users').doc(uid);
+
+                        final payload = {
+                          'habit': {
+                            'sleepHours': sleep,
+                            'exercise': exercise,
+                            'waterMl': water,
+                            'updatedAt': DateTime.now().toIso8601String(),
+                          }
+                        };
+
+                        await doc.set(payload, SetOptions(merge: true));
+
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved habit info')));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()),
+                        );
+                      } catch (e, st) {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+                        // ignore: avoid_print
+                        print(st);
+                      }
                     },
                     child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(

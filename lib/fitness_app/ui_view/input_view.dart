@@ -10,6 +10,10 @@ class InputView extends StatelessWidget {
   final String hint;
   final TextEditingController controller;
   final bool isNumber;
+  final List<String>? options;
+  final String? suffixText;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   const InputView({
     Key? key,
@@ -19,6 +23,10 @@ class InputView extends StatelessWidget {
     required this.hint,
     required this.controller,
     this.isNumber = false,
+  this.options,
+  this.suffixText,
+  this.readOnly = false,
+  this.onTap,
   }) : super(key: key);
 
   @override
@@ -64,30 +72,54 @@ class InputView extends StatelessWidget {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: TextField(
-                        controller: controller,
+                      child: (options != null && options!.isNotEmpty)
+                          ? Builder(builder: (context) {
+                              final dropdown = DropdownButtonFormField<String>(
+                                value: controller.text.isNotEmpty && options!.contains(controller.text) ? controller.text : null,
+                                items: options!.map((o) => DropdownMenuItem<String>(value: o, child: Text(o))).toList(),
+                                onChanged: (v) {
+                                  if (v != null) controller.text = v;
+                                },
+                                decoration: InputDecoration(
+                                  hintText: hint,
+                                  fillColor: FitnessAppTheme.nearlyWhite,
+                                  filled: true,
+                                  suffixText: suffixText,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                ),
+                              );
 
-                        keyboardType:
-                        isNumber ? TextInputType.number : TextInputType.text,
+                              if (readOnly || onTap != null) {
+                                return GestureDetector(onTap: onTap ?? () {}, child: AbsorbPointer(child: dropdown));
+                              }
 
-                        inputFormatters: isNumber
-                            ? [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ]
-                            : null,
+                              return dropdown;
+                            })
+                          : TextField(
+                              controller: controller,
 
-                        decoration: InputDecoration(
-                          hintText: hint,
-                          fillColor: FitnessAppTheme.nearlyWhite,
-                          filled: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12)
-                        ),
-                      ),
+                              keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+
+                              inputFormatters: isNumber
+                                  ? [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ]
+                                  : null,
+
+                              decoration: InputDecoration(
+                                  hintText: hint,
+                                  fillColor: FitnessAppTheme.nearlyWhite,
+                                  filled: true,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+                            ),
                     ),
                   ),
                 ),

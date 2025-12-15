@@ -4,6 +4,7 @@ import '../fitness_app_theme.dart';
 import '../ui_view/input_view.dart';
 import '../fitness_app_home_screen.dart';
 import '../input_information/future_screen.dart';
+import '../../services/profile_sync_service.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({Key? key}) : super(key: key);
@@ -23,6 +24,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   double topBarOpacity = 0.0;
 
   DateTime selectedDate = DateTime.now();
+  // Persist controllers so values remain and can be read
+  final TextEditingController ageController = TextEditingController();
+  final TextEditingController genderController = TextEditingController();
+  final TextEditingController weightController = TextEditingController();
+  final TextEditingController heightController = TextEditingController();
 
   @override
   void initState() {
@@ -38,7 +44,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       ),
     );
 
-    addAllListData();
+  addAllListData();
 
     scrollController.addListener(() {
       if (scrollController.offset >= 24) {
@@ -66,6 +72,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.initState();
   }
 
+  @override
+  void dispose() {
+    ageController.dispose();
+    genderController.dispose();
+    weightController.dispose();
+    heightController.dispose();
+    animationController.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
   void addAllListData() {
     const int count = 4;
 
@@ -80,11 +97,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         animationController: animationController!,
         title: "Age",
         hint: "Enter your age...",
-        controller: TextEditingController(),
-        isNumber: true,
+  controller: ageController,
+  isNumber: true,
       ),
     );
 
+    final genderOptions = ['Male', 'Female', 'Other'];
     listViews.add(
       InputView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -96,8 +114,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         animationController: animationController!,
         title: "Gender",
         hint: "Enter your gender...",
-        controller: TextEditingController(),
-        isNumber: true,
+  controller: genderController,
+  isNumber: false,
+  options: genderOptions,
       ),
     );
 
@@ -112,8 +131,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         animationController: animationController!,
         title: "Weight",
         hint: "Enter your weight...",
-        controller: TextEditingController(),
-        isNumber: true,
+  controller: weightController,
+  isNumber: true,
       ),
     );
 
@@ -128,8 +147,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         animationController: animationController!,
         title: "Height",
         hint: "Enter your height...",
-        controller: TextEditingController(),
-        isNumber: true,
+  controller: heightController,
+  isNumber: true,
       ),
     );
   }
@@ -172,6 +191,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ),
                   ElevatedButton(
                     onPressed: () {
+                      // save partial profile
+                      final data = {
+                        'profile': {
+                          'age': ageController.text.isNotEmpty ? int.tryParse(ageController.text) : null,
+                          'gender': genderController.text,
+                          'weightKg': weightController.text.isNotEmpty ? int.tryParse(weightController.text) : null,
+                          'heightCm': heightController.text.isNotEmpty ? int.tryParse(heightController.text) : null,
+                        }
+                      };
+                      ProfileSyncService.instance.saveProfilePartial(data);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => FutureScreen()),

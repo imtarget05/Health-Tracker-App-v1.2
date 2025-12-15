@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../fitness_app_theme.dart';
 import '../ui_view/input_view.dart';
 import '../input_information/welcome_screen.dart';
+import '../../services/profile_sync_service.dart';
 
 class SelectGoalScreen extends StatefulWidget {
   const SelectGoalScreen({Key? key}) : super(key: key);
@@ -83,6 +84,8 @@ class _SelectGoalScreenState extends State<SelectGoalScreen>
       ),
     );
 
+    // Training intensity options
+    final trainingOptions = ['Low', 'Moderate', 'High', 'Very High'];
     listViews.add(
       InputView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -94,11 +97,14 @@ class _SelectGoalScreenState extends State<SelectGoalScreen>
         animationController: animationController!,
         title: "Select your Training intensity",
         hint: "Enter your training intensity...",
-        controller: TextEditingController(),
-        isNumber: true,
+  controller: TextEditingController(),
+  isNumber: false,
+  options: trainingOptions,
       ),
     );
 
+    // Diet plan options
+    final dietOptions = ['Balanced', 'Low Carb', 'High Protein', 'Vegan', 'Keto'];
     listViews.add(
       InputView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -110,8 +116,9 @@ class _SelectGoalScreenState extends State<SelectGoalScreen>
         animationController: animationController!,
         title: "Select your Diet plan",
         hint: "Enter your Diet plan...",
-        controller: TextEditingController(),
-        isNumber: true,
+  controller: TextEditingController(),
+  isNumber: false,
+  options: dietOptions,
       ),
     );
   }
@@ -143,6 +150,14 @@ class _SelectGoalScreenState extends State<SelectGoalScreen>
 
                   ElevatedButton(
                     onPressed: () {
+                      final data = {
+                        'profile': {
+                          'fullName': listViews[0] is InputView ? (listViews[0] as InputView).controller.text : null,
+                          'trainingIntensity': listViews[1] is InputView ? (listViews[1] as InputView).controller.text : null,
+                          'dietPlan': listViews[2] is InputView ? (listViews[2] as InputView).controller.text : null,
+                        }
+                      };
+                      ProfileSyncService.instance.saveProfilePartial(data);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => WelcomeScreen()),

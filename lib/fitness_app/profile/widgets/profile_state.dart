@@ -5,11 +5,17 @@ import 'package:best_flutter_ui_templates/fitness_app/fitness_app_theme.dart';
 class ProfileStatsCard extends StatelessWidget {
   final Animation<double> animation;
   final AnimationController animationController;
+  final String calories;
+  final String weight;
+  final String height;
 
   const ProfileStatsCard({
     super.key,
     required this.animation,
     required this.animationController,
+    this.calories = '0 kcal',
+    this.weight = '0 kg',
+    this.height = '0 cm',
   });
 
   @override
@@ -35,10 +41,10 @@ class ProfileStatsCard extends StatelessWidget {
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: const [
-                _StatItem(label: "Calories", value: "2300 kcal"),
-                _StatItem(label: "Weight", value: "68 kg"),
-                _StatItem(label: "Height", value: "172 cm"),
+              children: [
+                _StatItem(label: "Năng lượng", value: calories),
+                _StatItem(label: "Cân nặng", value: weight),
+                _StatItem(label: "Chiều cao", value: height),
               ],
             ),
           ),

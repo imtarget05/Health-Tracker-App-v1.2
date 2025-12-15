@@ -25,6 +25,8 @@ import 'package:provider/provider.dart';
 import 'screens/health_check_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'fitness_app/debug/profile_sync_debug.dart';
+import 'services/profile_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +34,12 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Initialize profile sync service (Hive + optional firebase init inside service)
+  try {
+    await ProfileSyncService.instance.init();
+  } catch (e) {
+    print('ProfileSyncService init warning: $e');
+  }
   // Log xác nhận Firebase đã khởi tạo
   print('✅ Firebase initialized: [32m${Firebase.apps.isNotEmpty}[0m');
   try {
@@ -78,6 +86,7 @@ class MyApp extends StatelessWidget {
       routes: {
         'register': (context) => RegisterPage(title: 'Register'),
         'health-check': (context) => HealthCheckScreen(),
+  'profile-sync-debug': (context) => const ProfileSyncDebugPage(),
       },
       home: LoginPage(title: 'Login'),
     );

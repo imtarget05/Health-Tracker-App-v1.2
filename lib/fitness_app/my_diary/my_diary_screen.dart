@@ -200,12 +200,13 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         } else {
           return ListView.builder(
             controller: scrollController,
-            padding: EdgeInsets.only(
-              top: AppBar().preferredSize.height +
-                  MediaQuery.of(context).padding.top +
-                  24,
-              bottom: 62 + MediaQuery.of(context).padding.bottom,
-            ),
+        padding: EdgeInsets.only(
+          top: AppBar().preferredSize.height +
+            MediaQuery.of(context).padding.top +
+            24,
+          // extra bottom padding to ensure cards don't underlap the bottom nav
+          bottom: 92 + MediaQuery.of(context).padding.bottom,
+        ),
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,
             itemBuilder: (BuildContext context, int index) {
