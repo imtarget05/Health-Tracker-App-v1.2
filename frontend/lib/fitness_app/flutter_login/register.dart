@@ -120,50 +120,86 @@ class _RegisterPageState extends State<RegisterPage> {
         return;
       }
 
-      // Check firestore for existing profile info
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final data = doc.data() ?? {};
-
-      String? resolveName(Map<String, dynamic> d) {
-        final candidates = [d['fullName'], d['displayName'], d['name']];
-        for (final c in candidates) {
-          if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+      // Prefer backend check if we have a backend JWT saved
+      Map<String, dynamic>? backendResp;
+      try {
+        final jwt = AuthStorage.token;
+        if (jwt != null) {
+          backendResp = await BackendApi.getMe(jwt: jwt);
         }
-        final p = d['profile'];
-        if (p is Map<String, dynamic>) {
-          final pc = [p['fullName'], p['displayName'], p['name']];
-          for (final c in pc) {
-            if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
-          }
-        }
-        return null;
+      } catch (e) {
+        backendResp = null;
       }
 
-      if (resolveName(data) == null) {
-        // Force the user to complete profile. If they cancel, ask to retry or logout.
-        bool completed = false;
-        while (!completed) {
-          if (!mounted) return;
+      if (backendResp != null) {
+        final hasProfile = backendResp['hasProfile'] as bool? ?? false;
+        if (!hasProfile) {
+          // force profile completion
+          while (mounted) {
             final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
-          if (saved == true) {
-            completed = true;
-            break;
+            if (saved == true) break;
+            final retry = await showDialog<bool>(
+              context: context,
+              builder: (c) => AlertDialog(
+                title: const Text('Yêu cầu hoàn thành hồ sơ'),
+                content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
+                  TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
+                ],
+              ),
+            );
+            if (retry == false) {
+              await FirebaseAuth.instance.signOut();
+              return;
+            }
           }
-          if (!mounted) return;
-          final choice = await showDialog<bool>(
-            context: context,
-            builder: (c) => AlertDialog(
-              title: const Text('Yêu cầu hoàn thành hồ sơ'),
-              content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
-                TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
-              ],
-            ),
-          );
-          if (choice == false) {
-            await FirebaseAuth.instance.signOut();
-            return;
+        }
+      } else {
+        // fallback: Firestore check (existing behavior)
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final data = doc.data() ?? {};
+
+        String? resolveName(Map<String, dynamic> d) {
+          final candidates = [d['fullName'], d['displayName'], d['name']];
+          for (final c in candidates) {
+            if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+          }
+          final p = d['profile'];
+          if (p is Map<String, dynamic>) {
+            final pc = [p['fullName'], p['displayName'], p['name']];
+            for (final c in pc) {
+              if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
+            }
+          }
+          return null;
+        }
+
+        if (resolveName(data) == null) {
+          bool completed = false;
+          while (!completed) {
+            if (!mounted) return;
+            final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
+            if (saved == true) {
+              completed = true;
+              break;
+            }
+            if (!mounted) return;
+            final choice = await showDialog<bool>(
+              context: context,
+              builder: (c) => AlertDialog(
+                title: const Text('Yêu cầu hoàn thành hồ sơ'),
+                content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
+                  TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
+                ],
+              ),
+            );
+            if (choice == false) {
+              await FirebaseAuth.instance.signOut();
+              return;
+            }
           }
         }
       }
