@@ -74,7 +74,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     onSave(controller.text);
                     Navigator.pop(ctx);
                   },
-                  child: const Text('Lưu'),
+                  child: const Text('Save'),
                 ),
               ),
             ],
@@ -92,7 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
-        title: const Text('Sửa hồ sơ', style: TextStyle(color: Colors.black)),
+  title: const Text('Edit Profile', style: TextStyle(color: Colors.black)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -203,7 +203,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: link!));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Đã sao chép liên kết')),
+                            const SnackBar(content: Text('Link copied')),
                           );
                         },
                       )
@@ -226,7 +226,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: email));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép email')));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email copied')));
                   },
                 ),
                 onTap: () => _editField(
@@ -242,7 +242,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: phone));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép số điện thoại')));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone number copied')));
                   },
                 ),
                 onTap: () => _editField(
