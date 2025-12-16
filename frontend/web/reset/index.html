@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reset Redirect</title>
+</head>
+
+<body>
+    <p>Redirecting to app to complete password reset...</p>
+    <script>
+        // This page reads the oobCode (or code) query param and redirects to the app scheme.
+        (function () {
+            try {
+                const params = new URLSearchParams(location.search);
+                const code = params.get('oobCode') || params.get('oobcode') || params.get('code');
+                if (!code) {
+                    document.body.innerText = 'Missing reset code in URL';
+                    return;
+                }
+
+                // Replace myapp with your real app scheme (e.g. healthytracker)
+                const appScheme = 'myapp';
+                const target = `${appScheme}://reset?oobCode=${encodeURIComponent(code)}`;
+
+                // Try to open app. On iOS Safari, this will try the scheme and if the app is not installed
+                // the page will remain; you can optionally show instructions to the user.
+                window.location = target;
+                // As a fallback, after short delay navigate to a friendly page instructing user
+                setTimeout(function () {
+                    // Optionally navigate to a web fallback page (same domain) showing instructions
+                    // location.href = '/web-reset-fallback.html';
+                }, 1200);
+            } catch (e) {
+                document.body.innerText = 'Redirect failed: ' + (e && e.message ? e.message : e);
+            }
+        })();
+    </script>
+</body>
+
+</html>
