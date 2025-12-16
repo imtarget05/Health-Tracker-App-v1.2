@@ -12,6 +12,8 @@ import '../../services/google_auth_service.dart';
 import '../../services/facebook_auth_service.dart';
 import '../profile/edit_profile.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/auth_storage.dart';
+import '../../services/backend_api.dart';
 
 class LoginPage extends StatefulWidget {
   final String? title;
@@ -331,8 +333,36 @@ Future<void> _ensureProfileCompletedAndNavigate(NavigatorState nav) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
 
-  final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-  final data = doc.data() ?? {};
+  // Prefer backend check if we have a backend JWT saved
+  Map<String, dynamic>? backendResp;
+  try {
+    final jwt = AuthStorage.token;
+    if (jwt != null) {
+      backendResp = await BackendApi.getMe(jwt: jwt);
+    }
+  } catch (e) {
+    print('Backend /me check failed: $e');
+    backendResp = null;
+  }
+
+  Map<String, dynamic> data = {};
+  if (backendResp != null) {
+    // backend responds { hasProfile: bool, profile: {...} }
+    final hasProfile = backendResp['hasProfile'] as bool? ?? false;
+    if (!hasProfile) {
+      final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
+      if (saved == true) {
+        nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+      }
+      return;
+    }
+    // profile exists -> go to dashboard
+    nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+    return;
+  } else {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    data = doc.data() ?? {};
+  }
 
   // Check multiple locations for a name/email to consider profile complete
   String? resolveName(Map<String, dynamic> d) {
