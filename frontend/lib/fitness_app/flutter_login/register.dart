@@ -115,7 +115,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+  scaffold.showSnackBar(const SnackBar(content: Text('Registration successful')));
         nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
         return;
       }
@@ -141,11 +141,11 @@ class _RegisterPageState extends State<RegisterPage> {
             final retry = await showDialog<bool>(
               context: context,
               builder: (c) => AlertDialog(
-                title: const Text('Yêu cầu hoàn thành hồ sơ'),
-                content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
+                title: const Text('Profile completion required'),
+                content: const Text('You must complete your profile to continue. Retry or sign out?'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
-                  TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
+                  TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Retry')),
+                  TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Sign out')),
                 ],
               ),
             );
@@ -204,7 +204,7 @@ class _RegisterPageState extends State<RegisterPage> {
         }
       }
 
-  if (mounted) scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+  if (mounted) scaffold.showSnackBar(const SnackBar(content: Text('Registration successful')));
   if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
     } on FirebaseAuthException catch (e) {
   if (mounted) nav.pop();
@@ -223,13 +223,13 @@ class _RegisterPageState extends State<RegisterPage> {
       );
     } catch (e) {
   if (mounted) nav.pop();
-  String errorMsg = 'Đăng ký thất bại';
+  String errorMsg = 'Registration failed';
       if (e.toString().contains('email-already-exists') || e.toString().contains('email-already-in-use')) {
-        errorMsg = 'Email đã tồn tại.';
+  errorMsg = 'Email already in use.';
       } else if (e.toString().contains('weak-password')) {
-        errorMsg = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+  errorMsg = 'Weak password (minimum 6 characters).';
       } else if (e.toString().contains('invalid-email')) {
-        errorMsg = 'Email không hợp lệ.';
+  errorMsg = 'Invalid email.';
       } else {
         errorMsg = e.toString();
       }

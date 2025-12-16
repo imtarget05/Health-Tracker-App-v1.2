@@ -59,10 +59,10 @@ class _ProfileHeaderState extends State<ProfileHeader> {
     if (widget.lastUpdated == null) return '';
     final now = DateTime.now();
     final diff = now.difference(widget.lastUpdated!);
-    if (diff.inMinutes < 1) return 'Cập nhật: vừa xong';
-    if (diff.inHours < 1) return 'Cập nhật: ${diff.inMinutes} phút trước';
-    if (diff.inDays < 1) return 'Cập nhật: ${diff.inHours} giờ trước';
-    return 'Cập nhật: ${diff.inDays} ngày trước';
+    if (diff.inMinutes < 1) return 'Updated: just now';
+    if (diff.inHours < 1) return 'Updated: ${diff.inMinutes} minutes ago';
+    if (diff.inDays < 1) return 'Updated: ${diff.inHours} hours ago';
+    return 'Updated: ${diff.inDays} days ago';
   }
 
   @override
@@ -226,7 +226,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           children: [
                             Text(_formatWeight(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 4),
-                            const Text('Cân nặng', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text('Weight', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
@@ -236,7 +236,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           children: [
                             Text(_formatHeight(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 4),
-                            const Text('Chiều cao', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text('Height', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
@@ -246,7 +246,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           children: [
                             Text(_formatLastUpdated(), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                             const SizedBox(height: 4),
-                            const Text('Cập nhật', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text('Updated', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
