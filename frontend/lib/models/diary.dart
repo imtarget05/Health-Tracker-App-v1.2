@@ -15,7 +15,7 @@ class Weight {
 
   factory Weight.fromMap(Map<String, dynamic> m) => Weight(
         valueKg: (m['valueKg'] as num).toDouble(),
-        recordedAt: m['recordedAt'] as Timestamp,
+  recordedAt: m['recordedAt'] as Timestamp? ?? Timestamp.now(),
         source: m['source'] as String? ?? 'manual',
       );
 }
@@ -39,7 +39,7 @@ class BodyMeasurements {
         heightCm: (m['heightCm'] as num).toDouble(),
         bmi: (m['bmi'] as num).toDouble(),
         bodyFatPercent: (m['bodyFatPercent'] as num).toDouble(),
-        recordedAt: m['recordedAt'] as Timestamp,
+  recordedAt: m['recordedAt'] as Timestamp? ?? Timestamp.now(),
       );
 }
 
@@ -59,7 +59,7 @@ class Water {
   factory Water.fromMap(Map<String, dynamic> m) => Water(
         consumedMl: (m['consumedMl'] as num).toInt(),
         dailyGoalMl: (m['dailyGoalMl'] as num).toInt(),
-        lastDrinkAt: m['lastDrinkAt'] as Timestamp,
+  lastDrinkAt: m['lastDrinkAt'] as Timestamp? ?? Timestamp.now(),
       );
 }
 
@@ -97,7 +97,7 @@ class Meal {
         proteinG: (m['proteinG'] as num).toInt(),
         fatG: (m['fatG'] as num).toInt(),
         items: List<String>.from(m['items'] ?? []),
-        createdAt: m['createdAt'] as Timestamp,
+  createdAt: m['createdAt'] as Timestamp? ?? Timestamp.now(),
       );
 }
 
@@ -147,13 +147,13 @@ class Diary {
 
   factory Diary.fromMap(String id, Map<String, dynamic> m) => Diary(
         id: id,
-        date: m['date'] as Timestamp,
+  date: m['date'] as Timestamp? ?? Timestamp.now(),
         dietPlan: m['dietPlan'] as String? ?? '',
         weight: m['weight'] != null ? Weight.fromMap(Map<String, dynamic>.from(m['weight'])) : null,
         bodyMeasurements: m['bodyMeasurements'] != null ? BodyMeasurements.fromMap(Map<String, dynamic>.from(m['bodyMeasurements'])) : null,
         water: m['water'] != null ? Water.fromMap(Map<String, dynamic>.from(m['water'])) : null,
         meals: (m['meals'] as List<dynamic>?)?.map((e) => Meal.fromMap(Map<String, dynamic>.from(e))).toList() ?? [],
         macrosSummary: m['macrosSummary'] != null ? MacrosSummary.fromMap(Map<String, dynamic>.from(m['macrosSummary'])) : null,
-        updatedAt: m['updatedAt'] as Timestamp? ?? Timestamp.now(),
+  updatedAt: m['updatedAt'] as Timestamp? ?? Timestamp.now(),
       );
 }
