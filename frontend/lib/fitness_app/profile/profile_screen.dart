@@ -84,17 +84,25 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
 
   Widget _buildMainListView(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return const Center(child: Text('Please log in'));
+    if (user == null) return const Center(child: Text('Vui lòng đăng nhập'));
 
     final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    // Guard the stream so Firestore permission errors don't crash the app.
+    final safeStream = docRef.snapshots().handleError((e) {
+      debugPrint('ProfileScreen: snapshots stream error: $e');
+    });
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: docRef.snapshots(),
+      stream: safeStream,
       builder: (context, snap) {
+        if (snap.hasError) return Center(child: Text('Không thể tải hồ sơ: ${snap.error}'));
         if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-  if (!snap.hasData || snap.data == null || !snap.data!.exists) return const Center(child: Text('No profile data'));
+        if (!snap.hasData || snap.data == null || !snap.data!.exists) return const Center(child: Text('Chưa có dữ liệu hồ sơ'));
 
         final data = snap.data!.data() ?? {};
         final profile = (data['profile'] as Map<String, dynamic>?) ?? {};
+  final dailyWaterMl = profile['dailyWaterMl'] is num ? (profile['dailyWaterMl'] as num).toInt() : null;
+  final drinkingTimes = profile['drinkingTimes'] is List ? List<String>.from(profile['drinkingTimes'] as List) : <String>[];
         final name = profile['fullName'] ?? profile['displayName'] ?? profile['name'] ?? '';
         final email = profile['email'] ?? '';
         final avatar = profile['profilePic'] ?? profile['photoURL'] ?? '';
@@ -117,13 +125,15 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
             bottom: 62 + MediaQuery.of(context).padding.bottom,
           ),
           children: [
-            TitleView(titleTxt: 'Profile', animation: AlwaysStoppedAnimation(1.0), animationController: _controller),
+            TitleView(titleTxt: 'Bạn', animation: AlwaysStoppedAnimation(1.0), animationController: _controller),
             ProfileHeader(
               imageUrl: avatar,
               name: name,
               email: email,
               weightKg: weightKg,
               heightCm: heightCm,
+              dailyWaterMl: dailyWaterMl,
+              drinkingTimes: drinkingTimes,
               lastUpdated: lastUpdated,
               animation: AlwaysStoppedAnimation(1.0),
               animationController: _controller,
@@ -133,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                 final navigator = Navigator.of(context);
                 final saved = await navigator.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
                 if (!mounted) return;
-                if (saved == true) scaffold.showSnackBar(const SnackBar(content: Text('Profile updated')));
+                if (saved == true) scaffold.showSnackBar(const SnackBar(content: Text('Hồ sơ đã được cập nhật')));
               },
               onLogout: () async {
                 final navigator = Navigator.of(context);
@@ -160,15 +170,16 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   final payload = {'profile': {'profilePic': downloadUrl}, 'lastUpdated': FieldValue.serverTimestamp()};
                   await doc.set(payload, SetOptions(merge: true));
                   if (!mounted) return;
-                  scaffold.showSnackBar(const SnackBar(content: Text('Avatar updated')));
+                  scaffold.showSnackBar(const SnackBar(content: Text('Ảnh đại diện đã được cập nhật')));
                 } catch (e) {
-                  if (mounted) scaffold.showSnackBar(SnackBar(content: Text('Failed to update avatar: $e')));
+                  if (mounted) scaffold.showSnackBar(SnackBar(content: Text('Không thể cập nhật ảnh: $e')));
                 }
               },
             ),
             TitleView(titleTxt: 'Thống kê', animation: AlwaysStoppedAnimation(1.0), animationController: _controller),
             ProfileStatsCard(animation: AlwaysStoppedAnimation(1.0), animationController: _controller, calories: calories, weight: weight, height: height),
-            ProfileGoalCard(animation: AlwaysStoppedAnimation(1.0), animationController: _controller, goals: goals),
+            // add drinking times as an informal goal entry if present
+            ProfileGoalCard(animation: AlwaysStoppedAnimation(1.0), animationController: _controller, goals: ([...goals]..addAll(drinkingTimes.isNotEmpty ? ['Drinking times: ${drinkingTimes.join(', ')}'] : []))),
           ],
         );
       },
@@ -204,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Text(
-                                  'Your Profile',
+                                  'Hồ sơ của bạn',
                                   textAlign: TextAlign.left,
                                   style: TextStyle(
                                     fontFamily: FitnessAppTheme.fontName,
@@ -260,11 +271,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                                 final shouldLogout = await showDialog<bool>(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: const Text('Confirm sign out'),
-                                    content: const Text('Are you sure you want to sign out?'),
+                                    title: const Text('Xác nhận đăng xuất'),
+                                    content: const Text('Bạn có chắc muốn đăng xuất không?'),
                                     actions: [
-                                      TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                                      TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Sign out')),
+                                      TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Hủy')),
+                                      TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Đăng xuất')),
                                     ],
                                   ),
                                 );

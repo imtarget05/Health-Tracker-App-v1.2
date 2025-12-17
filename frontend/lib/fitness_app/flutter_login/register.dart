@@ -7,7 +7,10 @@ import 'package:firebase_core/firebase_core.dart';
 import '../../firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../profile/edit_profile.dart';
+import '../input_information/welcome_screen.dart';
 import '../welcome/onboarding_screen.dart';
+import '../my_diary/my_diary_screen.dart';
+import '../fitness_app_home_screen.dart';
 
 class RegisterPage extends StatefulWidget {
   RegisterPage({super.key, required this.title});
@@ -115,97 +118,111 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-  scaffold.showSnackBar(const SnackBar(content: Text('Registration successful')));
+        scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
         nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
         return;
       }
 
-      // Prefer backend check if we have a backend JWT saved
-      Map<String, dynamic>? backendResp;
+      // Check firestore for existing profile info. If reads are blocked by
+      // security rules (permission-denied) or network errors occur, assume
+      // backend will handle profile creation and proceed into the app.
+      Map<String, dynamic> data = {};
       try {
-        final jwt = AuthStorage.token;
-        if (jwt != null) {
-          backendResp = await BackendApi.getMe(jwt: jwt);
-        }
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        data = doc.data() ?? {};
       } catch (e) {
-        backendResp = null;
+        // ignore firestore read errors and continue
+        data = {};
       }
 
-      if (backendResp != null) {
-        final hasProfile = backendResp['hasProfile'] as bool? ?? false;
-        if (!hasProfile) {
-          // force profile completion
-          while (mounted) {
-            final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
-            if (saved == true) break;
-            final retry = await showDialog<bool>(
-              context: context,
-              builder: (c) => AlertDialog(
-                title: const Text('Profile completion required'),
-                content: const Text('You must complete your profile to continue. Retry or sign out?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Retry')),
-                  TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Sign out')),
-                ],
-              ),
-            );
-            if (retry == false) {
-              await FirebaseAuth.instance.signOut();
-              return;
-            }
-          }
+      String? resolveName(Map<String, dynamic> d) {
+        final candidates = [d['fullName'], d['displayName'], d['name']];
+        for (final c in candidates) {
+          if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
         }
-      } else {
-        // fallback: Firestore check (existing behavior)
-        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        final data = doc.data() ?? {};
-
-        String? resolveName(Map<String, dynamic> d) {
-          final candidates = [d['fullName'], d['displayName'], d['name']];
-          for (final c in candidates) {
+        final p = d['profile'];
+        if (p is Map<String, dynamic>) {
+          final pc = [p['fullName'], p['displayName'], p['name']];
+          for (final c in pc) {
             if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
           }
-          final p = d['profile'];
-          if (p is Map<String, dynamic>) {
-            final pc = [p['fullName'], p['displayName'], p['name']];
-            for (final c in pc) {
-              if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
-            }
-          }
-          return null;
         }
+        return null;
+      }
 
-        if (resolveName(data) == null) {
-          bool completed = false;
-          while (!completed) {
-            if (!mounted) return;
+      bool needsInputInformation(Map<String, dynamic> d) {
+        final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+        dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+        final age = getField('age');
+        final gender = getField('gender');
+        final weightKg = getField('weightKg');
+        final heightCm = getField('heightCm');
+        final idealWeightKg = getField('idealWeightKg');
+        final deadline = getField('deadline');
+        if (age == null) return true;
+        if (gender == null || gender.toString().trim().isEmpty) return true;
+        if (weightKg == null) return true;
+        if (heightCm == null) return true;
+        if (idealWeightKg == null) return true;
+        if (deadline == null || deadline.toString().trim().isEmpty) return true;
+        return false;
+      }
+
+      bool needsOnboarding(Map<String, dynamic> d) {
+        final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+        dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+        final training = getField('trainingIntensity');
+        final diet = getField('dietPlan');
+        final onboardingName = getField('fullName') ?? getField('displayName') ?? getField('name');
+        if (training == null || training.toString().trim().isEmpty) return true;
+        if (diet == null || diet.toString().trim().isEmpty) return true;
+        if (onboardingName == null || onboardingName.toString().trim().isEmpty) return true;
+        return false;
+      }
+
+      // If onboarding fields are missing, route user into onboarding_contents first
+      if (needsOnboarding(data)) {
+        if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+        return;
+      }
+
+      // If input-information fields are missing, route to WelcomeScreen
+      if (needsInputInformation(data)) {
+        if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const WelcomeScreen()));
+        return;
+      }
+
+      if (resolveName(data) == null) {
+        // Force the user to complete profile. If they cancel, ask to retry or logout.
+        bool completed = false;
+        while (!completed) {
+          if (!mounted) return;
             final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
-            if (saved == true) {
-              completed = true;
-              break;
-            }
-            if (!mounted) return;
-            final choice = await showDialog<bool>(
-              context: context,
-              builder: (c) => AlertDialog(
-                title: const Text('Yêu cầu hoàn thành hồ sơ'),
-                content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
-                  TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
-                ],
-              ),
-            );
-            if (choice == false) {
-              await FirebaseAuth.instance.signOut();
-              return;
-            }
+          if (saved == true) {
+            completed = true;
+            break;
+          }
+          if (!mounted) return;
+          final choice = await showDialog<bool>(
+            context: context,
+            builder: (c) => AlertDialog(
+              title: const Text('Yêu cầu hoàn thành hồ sơ'),
+              content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
+                TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
+              ],
+            ),
+          );
+          if (choice == false) {
+            await FirebaseAuth.instance.signOut();
+            return;
           }
         }
       }
 
-  if (mounted) scaffold.showSnackBar(const SnackBar(content: Text('Registration successful')));
-  if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+  if (mounted) scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+  if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
     } on FirebaseAuthException catch (e) {
   if (mounted) nav.pop();
       String errorMsg = 'Đăng ký thất bại';
@@ -223,13 +240,13 @@ class _RegisterPageState extends State<RegisterPage> {
       );
     } catch (e) {
   if (mounted) nav.pop();
-  String errorMsg = 'Registration failed';
+  String errorMsg = 'Đăng ký thất bại';
       if (e.toString().contains('email-already-exists') || e.toString().contains('email-already-in-use')) {
-  errorMsg = 'Email already in use.';
+        errorMsg = 'Email đã tồn tại.';
       } else if (e.toString().contains('weak-password')) {
-  errorMsg = 'Weak password (minimum 6 characters).';
+        errorMsg = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
       } else if (e.toString().contains('invalid-email')) {
-  errorMsg = 'Invalid email.';
+        errorMsg = 'Email không hợp lệ.';
       } else {
         errorMsg = e.toString();
       }

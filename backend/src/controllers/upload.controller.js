@@ -151,3 +151,39 @@ export const uploadFileController = async (req, res) => {
         });
     }
 };
+
+// Dedicated avatar upload endpoint: upload image to `avatars/` and return public URL.
+// This intentionally skips AI processing and does not create a foodDetections record.
+export const uploadAvatarController = async (req, res) => {
+    let localPath;
+    try {
+        await firebasePromise;
+        const bucket = getBucket();
+        if (!req.file) {
+            return res.status(400).json({ message: "File is required (field: file)" });
+        }
+
+        localPath = req.file.path;
+        const originalName = req.file.originalname;
+        const mimeType = req.file.mimetype;
+
+        const fileNameOnBucket = `avatars/${Date.now()}-${originalName}`;
+        await bucket.upload(localPath, {
+            destination: fileNameOnBucket,
+            metadata: { contentType: mimeType },
+        });
+
+        const imageUrl = getPublicUrl(bucket, fileNameOnBucket);
+
+        // Clean up temp file
+        try { await fs.unlink(localPath); } catch (e) { console.warn('Cannot remove temp file:', localPath, e?.message || e); }
+
+        return res.status(200).json({ imageUrl });
+    } catch (error) {
+        console.error('Error in uploadAvatarController:', error);
+        if (localPath) {
+            try { await fs.unlink(localPath); } catch (e) { console.warn('Cannot remove temp file:', localPath, e?.message || e); }
+        }
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+};

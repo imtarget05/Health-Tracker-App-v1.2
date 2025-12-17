@@ -249,14 +249,66 @@ export const loginWithToken = async (req, res) => {
     }
     const uid = decodedToken.uid;
 
-    const userProfile = await getUserProfileByUid(uid);
-    if (!userProfile) {
-      return res.status(404).json({ message: "User not found" });
+    // Ensure a user profile exists in Firestore. If missing, upsert a minimal profile
+    // using information available from Firebase Auth (admin SDK).
+    const db = getDb();
+    let userProfile = await getUserProfileByUid(uid);
+
+    try {
+      // Fetch user record from Firebase Auth admin to obtain displayName/email/photoURL
+      let userRecord = null;
+      try {
+        userRecord = await auth.getUser(uid);
+      } catch (e) {
+        // If getUser fails, continue and rely on decodedToken / existing profile
+        console.warn('[loginWithToken] auth.getUser failed, proceeding with available data', e?.message || e);
+      }
+
+      const email = userRecord?.email || decodedToken.email || (userProfile && userProfile.email) || null;
+      const fullName = userRecord?.displayName || (userProfile && userProfile.fullName) || null;
+      const profilePic = userRecord?.photoURL || (userProfile && userProfile.profilePic) || "";
+
+      const now = new Date().toISOString();
+
+      if (!userProfile) {
+        // Create minimal profile
+        const minimal = {
+          uid,
+          email: email || '',
+          fullName: fullName || '',
+          profilePic: profilePic || '',
+          createdAt: now,
+          updatedAt: now,
+        };
+        try {
+          await db.collection('users').doc(uid).set(minimal);
+          userProfile = minimal;
+          console.log('[loginWithToken] created minimal user profile for uid=', uid);
+        } catch (e) {
+          console.error('[loginWithToken] Failed to create user profile in Firestore:', e?.message || e);
+          // Continue: we can still issue token but log the failure
+        }
+      } else {
+        // Update updatedAt and sync any missing fields
+        const updateData = { updatedAt: now };
+        if (!userProfile.fullName && fullName) updateData.fullName = fullName;
+        if (!userProfile.email && email) updateData.email = email;
+        if (!userProfile.profilePic && profilePic) updateData.profilePic = profilePic;
+        try {
+          await db.collection('users').doc(uid).set(updateData, { merge: true });
+          userProfile = await getUserProfileByUid(uid);
+          console.log('[loginWithToken] updated user profile for uid=', uid);
+        } catch (e) {
+          console.error('[loginWithToken] Failed to update user profile in Firestore:', e?.message || e);
+        }
+      }
+    } catch (e) {
+      console.error('[loginWithToken] unexpected error during profile upsert:', e?.message || e);
     }
 
     const token = generateToken(uid, res);
 
-    return res.status(200).json(buildUserResponse(userProfile, token));
+    return res.status(200).json(buildUserResponse(userProfile || { uid, email: '', fullName: '', profilePic: '' }, token));
   } catch (error) {
     console.error("Error in login with token:", error && (error.stack || error));
     try {
@@ -279,29 +331,97 @@ export const loginWithToken = async (req, res) => {
 // ============= UPDATE PROFILE =============
 export const updateProfile = async (req, res) => {
   try {
-    const { profilePic, fullName } = req.body;
+    // Accept a wider set of profile fields from the client
+    const {
+      profilePic,
+      fullName,
+      username,
+      weightKg,
+      heightCm,
+      goal,
+      phone,
+      age,
+      gender,
+      idealWeightKg,
+      deadline,
+      trainingIntensity,
+      dietPlan,
+      dailyWaterMl,
+      drinkingTimes,
+      deadlineCompleted,
+    } = req.body || {};
+
     const userId = req.user.uid;
 
+    const now = new Date().toISOString();
     const updateData = {
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
 
-    // Upload hoặc update avatar
-    if (profilePic) {
-      updateData.profilePic = profilePic;
-    }
+    // copy allowed fields if provided
+    if (typeof profilePic === 'string' && profilePic.trim() !== '') updateData.profilePic = profilePic;
+    if (typeof fullName === 'string' && fullName.trim() !== '') updateData.fullName = fullName;
+    if (typeof username === 'string') updateData.username = username;
+    if (weightKg !== undefined) updateData.weightKg = weightKg;
+    if (heightCm !== undefined) updateData.heightCm = heightCm;
+    if (typeof goal === 'string') updateData.goal = goal;
+    if (typeof phone === 'string') updateData.phone = phone;
+    if (age !== undefined) updateData.age = age;
+    if (typeof gender === 'string') updateData.gender = gender;
+    if (idealWeightKg !== undefined) updateData.idealWeightKg = idealWeightKg;
+    if (typeof deadline === 'string') updateData.deadline = deadline;
+    if (typeof trainingIntensity === 'string') updateData.trainingIntensity = trainingIntensity;
+    if (typeof dietPlan === 'string') updateData.dietPlan = dietPlan;
+    if (dailyWaterMl !== undefined) updateData.dailyWaterMl = dailyWaterMl;
+    if (Array.isArray(drinkingTimes)) updateData.drinkingTimes = drinkingTimes;
+    if (deadlineCompleted !== undefined) updateData.deadlineCompleted = deadlineCompleted;
 
-    // Update fullname
     await firebasePromise;
     const auth = getAuth();
     const db = getDb();
 
-    if (fullName) {
-      updateData.fullName = fullName;
-      await auth.updateUser(userId, { displayName: fullName });
+    // Sync displayName and photoURL in Firebase Auth when provided
+    try {
+      const authUpdate = {};
+      if (fullName) authUpdate.displayName = fullName;
+      if (profilePic) authUpdate.photoURL = profilePic;
+      if (Object.keys(authUpdate).length > 0) {
+        await auth.updateUser(userId, authUpdate);
+      }
+    } catch (e) {
+      console.warn('[updateProfile] failed to update Firebase Auth user:', e?.message || e);
+      // continue; Firestore update is still the source of truth for profile document
     }
 
-    await db.collection("users").doc(userId).update(updateData);
+    // Mirror a subset of fields into nested `profile` map for frontend compatibility
+    const mirrorKeys = [
+      'profilePic',
+      'fullName',
+      'username',
+      'weightKg',
+      'heightCm',
+      'email',
+      'age',
+      'gender',
+      'dailyWaterMl',
+      'drinkingTimes',
+      'deadlineCompleted',
+    ];
+
+    const profileMap = {};
+    for (const k of mirrorKeys) {
+      if (Object.prototype.hasOwnProperty.call(updateData, k)) {
+        profileMap[k] = updateData[k];
+      }
+    }
+
+    const finalPayload = { ...updateData };
+    if (Object.keys(profileMap).length > 0) {
+      finalPayload.profile = profileMap;
+    }
+
+    // Persist into Firestore using merge to avoid clobbering other fields
+    await db.collection('users').doc(userId).set(finalPayload, { merge: true });
 
     const updatedUser = await getUserProfileByUid(userId);
 
@@ -309,11 +429,11 @@ export const updateProfile = async (req, res) => {
       uid: updatedUser.uid,
       fullName: updatedUser.fullName,
       email: updatedUser.email,
-      profilePic: updatedUser.profilePic || "",
+      profilePic: updatedUser.profilePic || '',
     });
   } catch (error) {
-    console.log("Error in update profile controller:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    console.log('Error in update profile controller:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
   }
 };
 

@@ -3,295 +3,240 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import '../../firebase_options.dart';
+import 'profile_sync_service.dart';
 
 class FacebookAuthService {
-  // Returns backend response map or throws
+  /// Sign in using Facebook and exchange the Firebase ID token with backend.
+  /// Returns backend JSON on success or a structured error map.
   Future<Map<String, dynamic>?> signInToBackend(String backendBaseUrl) async {
-    // Trigger Facebook login. Use webOnly login behavior on iOS to avoid LimitedToken
-    // which can be returned by native flows when the app is not public or permissions
-    // are restricted. Web flow normally returns a full user access token (EAA...).
-    // If you prefer native behavior on Android, you can adjust per-platform logic.
-    // Try multiple login behaviors to increase chance of receiving a full
-    // Facebook user access token (EAA...). On iOS simulators the plugin may
-    // return a LimitedToken (id_token) for some behaviors; try nativeWithFallback
-    // first, then webOnly as fallback.
-    LoginResult result = await FacebookAuth.instance.login(
-      permissions: ['email', 'public_profile'],
-      loginBehavior: LoginBehavior.webOnly,
-    );
+    final uri = Uri.parse('$backendBaseUrl/auth/facebook');
 
-    try {
-      final behaviors = [LoginBehavior.nativeWithFallback, LoginBehavior.webOnly];
-      for (final behavior in behaviors) {
-        // If the first call already succeeded, break early
-        if (result.status == LoginStatus.success) break;
-
-        // Attempt with next behavior
-        // ignore: avoid_print
-        print('facebookAuth: trying loginBehavior=$behavior');
+    // Try plugin login with sensible fallback order (native first then web)
+    LoginResult result = LoginResult(status: LoginStatus.failed);
+  // Try web-only first (often returns a full access token in simulator/emulator),
+  // then fallback to nativeWithFallback.
+  final behaviors = [LoginBehavior.webOnly, LoginBehavior.nativeWithFallback];
+    for (final behavior in behaviors) {
+      try {
+        if (kDebugMode) print('facebookAuth: trying loginBehavior=$behavior');
         final r = await FacebookAuth.instance.login(
           permissions: ['email', 'public_profile'],
           loginBehavior: behavior,
         );
-        // ignore: avoid_print
-        print('facebookAuth: result for $behavior = ${r.status}');
+        if (kDebugMode) print('facebookAuth: result for $behavior = ${r.status}');
         if (r.status == LoginStatus.success) {
           result = r;
           break;
         }
+      } catch (e) {
+        if (kDebugMode) print('facebookAuth: loginBehavior $behavior error: $e');
       }
-    } catch (e) {
-      // ignore and continue with whatever `result` we have
-      // ignore: avoid_print
-      print('facebookAuth: error while trying login behaviors: $e');
     }
 
-    // Log full result for debugging (status, message, accessToken shape)
-    try {
-      // ignore: avoid_print
-      print('facebookAuth: result.status=${result.status}');
-      // ignore: avoid_print
-      print('facebookAuth: result.message=${result.message}');
-      // accessToken may be null when status != success
-      // ignore: avoid_print
-      print('facebookAuth: accessToken=${result.accessToken}');
-    } catch (_) {}
+    // If plugin didn't return a success result, try reading last cached accessToken
+    if (result.status != LoginStatus.success) {
+      try {
+        final cached = await FacebookAuth.instance.accessToken;
+        if (cached != null) {
+          if (kDebugMode) print('facebookAuth: found cached accessToken');
+          result = LoginResult(status: LoginStatus.success, accessToken: cached);
+        }
+      } catch (_) {}
+    }
 
     if (result.status != LoginStatus.success) {
       final msg = result.message ?? result.status.toString();
-      throw Exception('Facebook login failed: $msg');
+      return {'error': true, 'message': 'Facebook login failed: $msg'};
     }
 
-  final accessToken = result.accessToken!;
+    final accessTokenObj = result.accessToken;
+    if (accessTokenObj == null) return {'error': true, 'message': 'No Facebook access token returned'};
 
-    // Force-use the explicit `token` property when available (flutter_facebook_auth exposes `accessToken.token`).
+    // Debug: log runtime type and toString() for investigation on devices where shape is unexpected
+    if (kDebugMode) {
+      try {
+        print('facebookAuth: accessTokenObj.runtimeType=' + accessTokenObj.runtimeType.toString());
+        print('facebookAuth: accessTokenObj.toString()=' + accessTokenObj.toString());
+      } catch (e) {
+        print('facebookAuth: failed to debug-print accessTokenObj: $e');
+      }
+    }
+
+    // extract token string robustly from multiple possible shapes
     String? tokenValue;
     try {
-      // Debug: print the full accessToken object shape (masked sensitive fields)
-      try {
-        final dyn = accessToken as dynamic;
-        if (dyn != null) {
-          Map<String, dynamic>? asJson;
+      final dyn = accessTokenObj as dynamic;
+
+      if (dyn == null) {
+        tokenValue = null;
+      } else {
+        // 1) Common direct getters
+        try {
+          tokenValue = dyn.token ?? dyn.tokenString ?? dyn.accessToken ?? dyn.value ?? dyn.rawToken ?? dyn.access_token;
+        } catch (_) {}
+
+        // 2) If it's a Map-like object or has toJson, try those
+        if (tokenValue == null) {
           try {
-            asJson = dyn.toJson() as Map<String, dynamic>?;
-          } catch (_) {
-            // some platform implementations may not expose toJson
-            asJson = null;
-          }
-
-          if (asJson != null) {
-            String maskField(String? s) {
-              if (s == null) return '';
-              if (s.length <= 16) return s;
-              return '${s.substring(0,8)}...${s.substring(s.length-8)}';
+            // try to call toJson() if available
+            final js = dyn.toJson != null ? dyn.toJson() : null;
+            if (js is Map) {
+              tokenValue = js['token'] ?? js['accessToken'] ?? js['access_token'] ?? js['value'];
             }
-
-            final shown = asJson.map((k, v) => MapEntry(k, v is String ? maskField(v) : v));
-            // ignore: avoid_print
-            print('facebookAuth: accessToken.toJson()=${shown}');
-          }
+          } catch (_) {}
         }
-      } catch (_) {}
-      final dyn = accessToken as dynamic;
-      // Primary: explicit token property
-      tokenValue = dyn.token != null ? dyn.token.toString() : null;
-      // Fallbacks (older shapes)
-      if (tokenValue == null) tokenValue = dyn.tokenString ?? dyn.accessToken;
-    } catch (_) {
+
+        // 3) If it's a plain Map
+        if (tokenValue == null && dyn is Map) {
+          tokenValue = dyn['token'] ?? dyn['accessToken'] ?? dyn['access_token'] ?? dyn['value'];
+        }
+
+        // 4) Fallback: try to extract EAA... or eyJ... substring from toString()
+        if (tokenValue == null) {
+          try {
+            final s = dyn.toString();
+            if (s != null) {
+              // find EAA... token
+              final eaam = RegExp(r'(EAA[0-9A-Za-z-_]{10,})');
+              final jwt = RegExp(r'(eyJ[0-9A-Za-z-_\.]{10,})');
+              final m1 = eaam.firstMatch(s);
+              final m2 = jwt.firstMatch(s);
+              if (m1 != null) tokenValue = m1.group(1);
+              else if (m2 != null) tokenValue = m2.group(1);
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('facebookAuth: token extraction error: $e');
       tokenValue = null;
     }
 
     if (tokenValue == null) {
+      // include fallback info for debugging
       try {
-        final dyn = accessToken as dynamic;
-        if (dyn.toJson != null) {
-          final json = dyn.toJson() as Map<String, dynamic>;
-          tokenValue = json['token'] ?? json['accessToken'] ?? json['tokenString'];
+        final cached = await FacebookAuth.instance.accessToken;
+        if (cached != null && kDebugMode) {
+          // Avoid referencing properties that may not exist on AccessToken across versions.
+          // Print a safe diagnostic instead.
+          print('facebookAuth: cached accessToken object present (${cached.toString()})');
         }
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
+      return {'error': true, 'message': 'Unable to extract Facebook access token (plugin returned unexpected shape)'};
     }
 
-    if (tokenValue == null) {
-      throw Exception('Unable to extract Facebook access token');
-    }
-
-    // DEBUG: print raw token in debug builds only so developer can copy it for
-    // debug_token checks. Remove this before releasing to production.
     if (kDebugMode) {
+      String mask(String t) {
+        if (t.length <= 12) return t;
+        return '${t.substring(0,6)}...${t.substring(t.length - 6)}';
+      }
       // ignore: avoid_print
-      print('facebookAuth: RAW tokenValue=${tokenValue}');
+      print('facebookAuth: token=${mask(tokenValue)} len=${tokenValue.length}');
     }
 
-    // If token looks like a JWT (id_token) reject it here; we require a user access token.
     final looksLikeJwt = tokenValue.startsWith('eyJ');
     final looksLikeEAA = tokenValue.startsWith('EAA');
-
-    if (looksLikeJwt) {
-      // We received an id_token/JWT instead of a user access token.
-      // In production you should use a Facebook user access token (EAA...).
-      // For development the backend has a dev-only path to accept and decode
-      // id_tokens; send the token to the server for development testing.
-      // Log a clear warning so developer sees this behavior.
-      // ignore: avoid_print
-      print('facebookAuth: warning received id_token/JWT from plugin; sending to backend for dev-only handling');
-    }
-
-    if (!looksLikeEAA) {
-      // Not starting with EAA — still possible but warn. We'll still send it because other token shapes may exist on some platforms,
-      // but log and allow the backend to reject if invalid. (This keeps compatibility on web where tokens can differ.)
-      // ignore: avoid_print
-      print('facebookAuth: warning token does not start with EAA; sending anyway for backend verification.');
-    }
-
-    // Prefer the explicit token property when available and mask for logs
+    // debug token expiry if available
     try {
-      if (tokenValue == null) {
-        // accessToken likely has `token` property
-        try {
-          tokenValue = (accessToken as dynamic).token ?? (accessToken as dynamic).tokenString ?? (accessToken as dynamic).accessToken;
-        } catch (_) {
-          // ignore
-        }
-      }
-
-      String mask(String t) {
-        if (t == null) return '';
-        if (t.length <= 16) return t;
-        return '${t.substring(0,8)}...${t.substring(t.length-8)}';
-      }
-
-      final len = tokenValue?.length ?? 0;
-      final looksLikeEAA = tokenValue != null && tokenValue.startsWith('EAA');
-      // ignore: avoid_print
-      print('facebookAuth: tokenValue=${tokenValue != null ? mask(tokenValue) : '<null>'} length=$len looksLikeEAA=$looksLikeEAA');
-    } catch (_) {}
-
-    // POST to backend /auth/facebook
-    final uri = Uri.parse('$backendBaseUrl/auth/facebook');
-    // If token looks like JWT, we will try the backend path, but primary flow below
-    // will try to sign in the user into Firebase client-side using the plugin result.
-
-    // Ensure Firebase client initialized
-    try {
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      final cached = await FacebookAuth.instance.accessToken;
+      if (cached != null && kDebugMode) {
+        // Print safe info — avoid accessing platform-specific getters
+        print('facebookAuth: cached accessToken present (${cached.toString()})');
       }
     } catch (_) {}
 
-    // Prefer using the plugin's accessToken to sign in with Firebase
+    // If token is not a standard Facebook access token, prefer backend verification
+    // First, try server-side exchange: POST the raw access token to backend /auth/facebook.
+    // Backend will validate the token with Facebook Graph API and create/upsert the user.
     try {
-      final accessTokenForFirebase = tokenValue;
-      // Build Facebook credential for Firebase
-      final facebookCredential = FacebookAuthProvider.credential(accessTokenForFirebase!);
-      // Sign in to Firebase with the Facebook credential
-      final userCred = await FirebaseAuth.instance.signInWithCredential(facebookCredential);
+      final body = {'accessToken': tokenValue};
+      if (looksLikeJwt) body['tokenType'] = 'id_token';
+      final serverResp = await http.post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body));
+      if (kDebugMode) print('facebookAuth: backend /auth/facebook returned status=${serverResp.statusCode}');
+      if (serverResp.statusCode >= 200 && serverResp.statusCode < 300) {
+        // Backend accepted token and returned user/session info — return immediately.
+        return jsonDecode(serverResp.body) as Map<String, dynamic>;
+      }
+      // If backend returned 4xx, fall through to attempt client-side Firebase sign-in as fallback.
+      if (kDebugMode) {
+        print('facebookAuth: backend rejected token, body=${serverResp.body} — falling back to client-side flow');
+      }
+    } catch (backendErr) {
+      if (kDebugMode) print('facebookAuth: backend /auth/facebook call failed: $backendErr');
+      // continue to client-side sign-in fallback
+    }
 
-      // Ensure Firestore profile exists with verbose logging for debugging
+    // If token doesn't look like standard EAA token, and server didn't accept it, inform caller early
+    if (!looksLikeEAA && !looksLikeJwt) {
+      return {'error': true, 'message': 'Facebook access token format not recognized by client; backend verification failed'};
+    }
+
+    // Ensure Firebase initialized
+    try {
+      if (Firebase.apps.isEmpty) await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    } catch (_) {}
+
+    // Sign in to Firebase with Facebook credential
+    try {
+      final credential = FacebookAuthProvider.credential(tokenValue);
+      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+
+      // Attempt guarded write of minimal profile
       try {
-        final db = FirebaseFirestore.instance;
         final uid = userCred.user?.uid;
-        // ignore: avoid_print
-        print('FacebookAuthService: firebase signInWithCredential returned uid=$uid, email=${userCred.user?.email}');
+        final displayName = userCred.user?.displayName;
+        final email = userCred.user?.email;
         if (uid != null) {
-          final userDoc = db.collection('users').doc(uid);
-          final docPath = userDoc.path;
-          // ignore: avoid_print
-          print('FacebookAuthService: checking user doc at $docPath');
-          final snap = await userDoc.get();
-          // ignore: avoid_print
-          print('FacebookAuthService: user doc exists=${snap.exists}');
-          if (!snap.exists) {
-            final profile = {
-              'uid': uid,
-              'email': userCred.user?.email ?? '',
-              'fullName': userCred.user?.displayName ?? '',
-              'profilePic': userCred.user?.photoURL ?? '',
-              'createdAt': DateTime.now().toIso8601String(),
-              'updatedAt': DateTime.now().toIso8601String(),
-              'provider': 'facebook',
-              'providerId': userCred.user?.uid,
-            };
-            // ignore: avoid_print
-            print('FacebookAuthService: creating user profile with payload=${profile}');
-            try {
-              await userDoc.set(profile);
-              // ignore: avoid_print
-              print('FacebookAuthService: successfully wrote user profile to $docPath');
-            } catch (writeErr, stack) {
-              // ignore: avoid_print
-              print('FacebookAuthService: failed to write user profile to $docPath: $writeErr');
-              // ignore: avoid_print
-              print(stack);
+          final db = FirebaseFirestore.instance;
+          final doc = db.collection('users').doc(uid);
+          final minimal = <String, dynamic>{
+            if (displayName != null) 'displayName': displayName,
+            if (email != null) 'email': email,
+            'lastSeen': DateTime.now().toIso8601String(),
+          };
+          try {
+            await doc.set(minimal, SetOptions(merge: true));
+            if (kDebugMode) print('FacebookAuthService: wrote minimal profile for $uid');
+          } catch (e) {
+            if (e is FirebaseException && e.code == 'permission-denied') {
+              if (kDebugMode) print('FacebookAuthService: permission-denied writing profile; enqueueing');
+              try {
+                await ProfileSyncService.instance.saveProfilePartial(minimal);
+              } catch (_) {}
+            } else {
+              if (kDebugMode) print('FacebookAuthService: unexpected error writing profile: $e');
             }
           }
         }
-      } catch (e, stack) {
-        // non-fatal; continue but log stack trace for debugging
-        // ignore: avoid_print
-        print('FacebookAuthService: failed to create client-side Firestore profile: $e');
-        // ignore: avoid_print
-        print(stack);
-      }
+      } catch (_) {}
 
-      // Get Firebase idToken and pass to backend login to get backend JWT
+      // Exchange Firebase ID token with backend
       final firebaseIdToken = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (firebaseIdToken == null) {
-        return {
-          'token': null,
-          'uid': FirebaseAuth.instance.currentUser?.uid,
-          'email': FirebaseAuth.instance.currentUser?.email,
-        };
-      }
+      if (firebaseIdToken == null) return {'error': true, 'message': 'Failed to get Firebase ID token'};
+      final resp = await http.post(Uri.parse('$backendBaseUrl/auth/login'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({'idToken': firebaseIdToken}));
+      if (resp.statusCode >= 200 && resp.statusCode < 300) return jsonDecode(resp.body) as Map<String, dynamic>;
 
-      final resp = await http.post(Uri.parse('$backendBaseUrl/auth/login'),
-          headers: {'Content-Type': 'application/json'}, body: jsonEncode({'idToken': firebaseIdToken}));
-
-      if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        return jsonDecode(resp.body) as Map<String, dynamic>;
-      }
-
+      // fallback: return local user info
       return {
         'token': null,
         'uid': FirebaseAuth.instance.currentUser?.uid,
         'email': FirebaseAuth.instance.currentUser?.email,
       };
+    } on FirebaseAuthException catch (e) {
+      final code = e.code;
+      String userMessage = 'Facebook sign-in failed';
+      if (code == 'invalid-credential') userMessage = 'Invalid Facebook credentials. Please try again.';
+      if (code == 'account-exists-with-different-credential') userMessage = 'An account already exists with a different sign-in method.';
+      return {'error': true, 'message': userMessage, 'code': code};
     } catch (e) {
-      // Fallback: send token directly to backend (dev path)
-      final body = {
-        'accessToken': tokenValue,
-        'tokenType': looksLikeJwt ? 'id_token' : 'access_token',
-      };
-      final resp = await http.post(uri,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(body));
-
-      // Debug: log backend response for troubleshooting
-      // ignore: avoid_print
-      print('FacebookAuthService: backend /auth/facebook POST status=${resp.statusCode}');
-      try {
-        // ignore: avoid_print
-        print('FacebookAuthService: backend /auth/facebook body=${resp.body}');
-      } catch (_) {}
-
-      if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        return jsonDecode(resp.body) as Map<String, dynamic>;
-      }
-
-      try {
-        final err = jsonDecode(resp.body);
-        final msg = err is Map && err.containsKey('message') ? err['message'] : resp.body;
-        throw Exception('Backend Facebook auth failed: ${resp.statusCode} $msg');
-      } catch (_) {
-        throw Exception('Backend Facebook auth failed: ${resp.statusCode} ${resp.body}');
-      }
+      // As a final fallback, post token to backend dev endpoint
+      final body = {'accessToken': tokenValue, 'tokenType': looksLikeJwt ? 'id_token' : 'access_token'};
+      final resp = await http.post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body));
+      if (resp.statusCode >= 200 && resp.statusCode < 300) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'error': true, 'message': 'Facebook authentication failed', 'detail': resp.body};
     }
   }
 }
