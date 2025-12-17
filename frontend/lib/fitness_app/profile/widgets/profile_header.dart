@@ -9,6 +9,8 @@ class ProfileHeader extends StatefulWidget {
   final double? weightKg;
   final double? heightCm;
   final DateTime? lastUpdated;
+  final int? dailyWaterMl;
+  final List<String>? drinkingTimes;
   final Animation<double> animation;
   final AnimationController animationController;
   final VoidCallback? onLogout;
@@ -22,7 +24,9 @@ class ProfileHeader extends StatefulWidget {
     this.email,
     this.weightKg,
     this.heightCm,
-    this.lastUpdated,
+  this.lastUpdated,
+  this.dailyWaterMl,
+  this.drinkingTimes,
     required this.animation,
     required this.animationController,
   this.onLogout,
@@ -59,10 +63,10 @@ class _ProfileHeaderState extends State<ProfileHeader> {
     if (widget.lastUpdated == null) return '';
     final now = DateTime.now();
     final diff = now.difference(widget.lastUpdated!);
-    if (diff.inMinutes < 1) return 'Updated: just now';
-    if (diff.inHours < 1) return 'Updated: ${diff.inMinutes} minutes ago';
-    if (diff.inDays < 1) return 'Updated: ${diff.inHours} hours ago';
-    return 'Updated: ${diff.inDays} days ago';
+    if (diff.inMinutes < 1) return 'Cập nhật: vừa xong';
+    if (diff.inHours < 1) return 'Cập nhật: ${diff.inMinutes} phút trước';
+    if (diff.inDays < 1) return 'Cập nhật: ${diff.inHours} giờ trước';
+    return 'Cập nhật: ${diff.inDays} ngày trước';
   }
 
   @override
@@ -226,7 +230,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           children: [
                             Text(_formatWeight(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 4),
-                            const Text('Weight', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text('Cân nặng', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
@@ -236,7 +240,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           children: [
                             Text(_formatHeight(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 4),
-                            const Text('Height', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text('Chiều cao', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
@@ -246,7 +250,12 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           children: [
                             Text(_formatLastUpdated(), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                             const SizedBox(height: 4),
-                            const Text('Updated', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const Text('Cập nhật', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            if (widget.dailyWaterMl != null) ...[
+                              const SizedBox(height: 8),
+                              Text('${widget.dailyWaterMl} ml', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const Text('Mục tiêu nước', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
                           ],
                         ),
                       ),

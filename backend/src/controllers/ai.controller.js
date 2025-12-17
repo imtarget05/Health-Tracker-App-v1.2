@@ -44,12 +44,16 @@ export const chatWithAiCoach = async (req, res) => {
 
     const user = req.user || null;
     let healthProfile = null;
+    let recentMeals = [];
+    let recentWaterLogs = [];
 
-    // Nếu có user → lấy profile để cá nhân hóa
+    // Nếu có user → lấy profile và recent logs để cá nhân hóa
     if (user?.uid || user?.userId) {
       const userId = user.uid || user.userId;
       await firebasePromise;
       const db = getDb();
+
+      // healthProfiles (optional)
       const snap = await db
         .collection("healthProfiles")
         .where("userId", "==", userId)
@@ -58,9 +62,50 @@ export const chatWithAiCoach = async (req, res) => {
       if (!snap.empty) {
         healthProfile = snap.docs[0].data();
       }
+
+      // recent meals: last 24 hours from 'meals' collection (assumes field userId and createdAt)
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      try {
+        const mealsSnap = await db
+          .collection('meals')
+          .where('userId', '==', userId)
+          .where('createdAt', '>=', since)
+          .orderBy('createdAt', 'desc')
+          .limit(10)
+          .get();
+        recentMeals = mealsSnap.docs.map(d => d.data());
+      } catch (e) {
+        console.warn('[chatWithAiCoach] failed to load recent meals', e?.message || e);
+      }
+
+      // recent water logs: last 24 hours from 'waterLogs' or 'water' collection
+      try {
+        const waterSnap = await db
+          .collection('water')
+          .where('userId', '==', userId)
+          .where('createdAt', '>=', since)
+          .orderBy('createdAt', 'desc')
+          .limit(50)
+          .get();
+        recentWaterLogs = waterSnap.docs.map(d => d.data());
+      } catch (e) {
+        console.warn('[chatWithAiCoach] failed to load water logs', e?.message || e);
+      }
     }
 
-    const systemPrompt = buildSystemPrompt(user, healthProfile);
+    // Build system prompt including recent logs
+    let systemPrompt = buildSystemPrompt(user, healthProfile);
+    if (recentMeals && recentMeals.length > 0) {
+      systemPrompt += '\n\nGần đây user đã ăn (24h):\n';
+      for (const m of recentMeals) {
+        const t = m.createdAt || m.timestamp || m.date || '';
+        systemPrompt += `- ${m.name ?? m.foodName ?? 'meal'} (${m.calories ?? m.totalCalories ?? '??'} cal) at ${t}\n`;
+      }
+    }
+    if (recentWaterLogs && recentWaterLogs.length > 0) {
+      const total = recentWaterLogs.reduce((s, r) => s + (Number(r.amountMl || r.amount || 0)), 0);
+      systemPrompt += `\nGần đây user đã uống tổng khoảng ${total} ml trong 24h:\n`;
+    }
 
     // Xây contents cho Gemini
     const contents = [];
@@ -94,6 +139,21 @@ export const chatWithAiCoach = async (req, res) => {
     });
 
     const replyText = response.text || "";
+
+    // Persist chat turn to `aiChats` collection for history/audit
+    try {
+      await firebasePromise;
+      const db = getDb();
+      await db.collection('aiChats').add({
+        userId: user?.uid || user?.userId || null,
+        message,
+        reply: replyText,
+        createdAt: new Date().toISOString(),
+        model: GEMINI_CHAT_MODEL,
+      });
+    } catch (e) {
+      console.warn('[chatWithAiCoach] failed to persist chat turn', e?.message || e);
+    }
 
     return res.status(200).json({
       reply: replyText,

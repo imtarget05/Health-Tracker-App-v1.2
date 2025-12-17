@@ -25,18 +25,18 @@ class _ProfileSyncDebugPageState extends State<ProfileSyncDebugPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile Sync Queue')),
+      appBar: AppBar(title: const Text('Hàng đợi đồng bộ hồ sơ')),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
-                ElevatedButton(onPressed: () async { await ProfileSyncService.instance.retryQueue(); await refresh(); }, child: const Text('Retry')),
+                ElevatedButton(onPressed: () async { await ProfileSyncService.instance.retryQueue(); await refresh(); }, child: const Text('Thử lại')),
                 SizedBox(width: 8),
-                ElevatedButton(onPressed: () async { await ProfileSyncService.instance.clearQueue(); await refresh(); }, child: const Text('Clear')),
+                ElevatedButton(onPressed: () async { await ProfileSyncService.instance.clearQueue(); await refresh(); }, child: const Text('Xóa')),
                 SizedBox(width: 8),
-                ElevatedButton(onPressed: () async { await refresh(); }, child: const Text('Refresh')),
+                ElevatedButton(onPressed: () async { await refresh(); }, child: const Text('Tải lại')),
               ],
             ),
           ),

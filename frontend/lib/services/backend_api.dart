@@ -154,4 +154,42 @@ class BackendApi {
       throw Exception('signup failed: ${resp.statusCode} ${resp.body}');
     }
   }
+
+    // Chat with AI coach: POST /ai/chat
+    static Future<Map<String, dynamic>> chat({required String jwt, required String message, List<Map<String, String>>? history}) async {
+      final url = Uri.parse('$baseUrl/ai/chat');
+      final body = {
+        'message': message,
+        if (history != null) 'history': history,
+      };
+
+      final resp = await http.post(url,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            if (jwt.isNotEmpty) 'Authorization': 'Bearer $jwt',
+          },
+          body: jsonEncode(body));
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+
+      throw Exception('chat failed: ${resp.statusCode} ${resp.body}');
+    }
+
+    // Get recent chat history for current user
+    static Future<List<dynamic>> getChatHistory({required String jwt, int limit = 20}) async {
+      final url = Uri.parse('$baseUrl/ai/history?limit=$limit');
+      final resp = await http.get(url, headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $jwt',
+      });
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        return jsonDecode(resp.body) as List<dynamic>;
+      }
+
+      throw Exception('getChatHistory failed: ${resp.statusCode} ${resp.body}');
+    }
 }

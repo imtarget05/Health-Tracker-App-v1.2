@@ -47,16 +47,21 @@ class ProfileSyncService {
 
     // Try immediate write if user signed in
     final user = FirebaseAuth.instance.currentUser;
+    var immediateFailedDueToPermissionDenied = false;
     if (user != null) {
       try {
         final db = FirebaseFirestore.instance;
         final doc = db.collection('users').doc(user.uid);
-  debugPrint('ProfileSync: immediate save for ${user.uid}, data: $data');
+        debugPrint('ProfileSync: immediate save for ${user.uid}, data: $data');
         await doc.set(data, SetOptions(merge: true));
-  debugPrint('ProfileSync: immediate save successful for ${user.uid}');
+        debugPrint('ProfileSync: immediate save successful for ${user.uid}');
         return;
       } catch (e) {
-  debugPrint('ProfileSync: immediate save failed for ${user.uid}: $e');
+        debugPrint('ProfileSync: immediate save failed for ${user.uid}: $e');
+        // If the failure is permission-denied, avoid immediately retrying flush
+        if (e is FirebaseException && e.code == 'permission-denied') {
+          immediateFailedDueToPermissionDenied = true;
+        }
         // fall through to enqueue
       }
     }
@@ -67,10 +72,14 @@ class ProfileSyncService {
       await init();
     }
     await _box!.add(jsonEncode(item));
-  _updateQueueCount();
+    _updateQueueCount();
     debugPrint('ProfileSync: enqueued item, queue=${_box?.length ?? 0}');
-    // attempt flush in background
-    unawaited(_flushQueue());
+    // attempt flush in background unless immediate save failed due to permission issues
+    if (!immediateFailedDueToPermissionDenied) {
+      unawaited(_flushQueue());
+    } else {
+      debugPrint('ProfileSync: skipping immediate flush due to permission-denied');
+    }
   }
 
   /// Return queued items as decoded list
@@ -120,11 +129,18 @@ class ProfileSyncService {
           await doc.set(data, SetOptions(merge: true));
           // remove item on success
           await box.deleteAt(0);
-            _updateQueueCount();
-            debugPrint('ProfileSync: flushed item successfully, queue=${box.length}');
+          _updateQueueCount();
+          debugPrint('ProfileSync: flushed item successfully, queue=${box.length}');
           attempt = 0; // reset backoff
         } catch (e) {
           debugPrint('ProfileSync: flush attempt failed: $e');
+          // If the error is permission-denied, stop retrying for now and leave
+          // the item in the queue. Backend/server is expected to reconcile user
+          // profiles when client writes are disallowed by security rules.
+          if (e is FirebaseException && e.code == 'permission-denied') {
+            debugPrint('ProfileSync: permission-denied while flushing; aborting retries');
+            break;
+          }
           attempt += 1;
           final backoff = Duration(seconds: (2 << (attempt > 6 ? 6 : attempt)));
           await Future.delayed(backoff);

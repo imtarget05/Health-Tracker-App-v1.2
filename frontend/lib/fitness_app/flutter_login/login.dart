@@ -3,6 +3,8 @@ import './register.dart';
 import './resetpassword.dart';
 
 import '../welcome/onboarding_screen.dart';
+import '../my_diary/my_diary_screen.dart';
+import '../fitness_app_home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../firebase_options.dart';
@@ -11,9 +13,8 @@ import '../../services/auth_storage.dart';
 import '../../services/google_auth_service.dart';
 import '../../services/facebook_auth_service.dart';
 import '../profile/edit_profile.dart';
+import '../input_information/welcome_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/auth_storage.dart';
-import '../../services/backend_api.dart';
 
 class LoginPage extends StatefulWidget {
   final String? title;
@@ -239,13 +240,34 @@ class _LoginPageState extends State<LoginPage> {
                               final svc = GoogleAuthService();
                               final backendBase = BackendApi.baseUrl;
                               final result = await svc.signInToBackend(backendBase);
-                              if (result != null) {
-                                final token = result['token'] as String?;
-                                if (token != null) {
-                                  AuthStorage.saveToken(token);
+                                if (result == null) {
+                                  // user cancelled the Google sign-in flow
+                                  scaffold.showSnackBar(const SnackBar(content: Text('Google sign-in cancelled')));
+                                } else if (result is Map && result['error'] == true) {
+                                  final msg = result['message'] ?? 'Google sign-in failed';
+                                  scaffold.showSnackBar(SnackBar(content: Text(msg)));
+                                } else {
+                                  final token = result['token'] as String?;
+                                  if (token != null) AuthStorage.saveToken(token);
+                                  // If backend returned a user object with a fullName or profile,
+                                  // assume backend has the authoritative profile state and navigate
+                                  // directly into the app to avoid extra client-side Firestore reads/writes.
+                                  bool backendHasName = false;
+                                  try {
+                                    if (result['fullName'] != null && result['fullName'].toString().trim().isNotEmpty) backendHasName = true;
+                                    final profileMap = result['profile'];
+                                    if (!backendHasName && profileMap is Map) {
+                                      if ((profileMap['fullName'] != null && profileMap['fullName'].toString().trim().isNotEmpty)) backendHasName = true;
+                                    }
+                                  } catch (_) {}
+
+                                  if (backendHasName) {
+                                    // navigate directly into home
+                                    nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+                                  } else {
+                                    await _ensureProfileCompletedAndNavigate(nav);
+                                  }
                                 }
-                                await _ensureProfileCompletedAndNavigate(nav);
-                              }
                             } catch (e) {
                               scaffold.showSnackBar(SnackBar(content: Text('Google sign-in failed: $e')));
                             } finally {
@@ -273,13 +295,31 @@ class _LoginPageState extends State<LoginPage> {
                               final svc = FacebookAuthService();
                               final backendBase = BackendApi.baseUrl;
                               final result = await svc.signInToBackend(backendBase);
-                              if (result != null) {
-                                final token = result['token'] as String?;
-                                if (token != null) {
-                                  AuthStorage.saveToken(token);
+                                if (result == null) {
+                                  scaffold.showSnackBar(const SnackBar(content: Text('Facebook sign-in cancelled')));
+                                } else if (result is Map && result['error'] == true) {
+                                  final msg = result['message'] ?? 'Facebook sign-in failed';
+                                  scaffold.showSnackBar(SnackBar(content: Text(msg)));
+                                } else {
+                                  final token = result['token'] as String?;
+                                  if (token != null) AuthStorage.saveToken(token);
+                                    // Backend authoritative check: if backend returned a name/profile,
+                                    // skip client-side profile checks and go straight to app.
+                                    bool backendHasName = false;
+                                    try {
+                                      if (result['fullName'] != null && result['fullName'].toString().trim().isNotEmpty) backendHasName = true;
+                                      final profileMap = result['profile'];
+                                      if (!backendHasName && profileMap is Map) {
+                                        if ((profileMap['fullName'] != null && profileMap['fullName'].toString().trim().isNotEmpty)) backendHasName = true;
+                                      }
+                                    } catch (_) {}
+
+                                    if (backendHasName) {
+                                      nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+                                    } else {
+                                      await _ensureProfileCompletedAndNavigate(nav);
+                                    }
                                 }
-                                await _ensureProfileCompletedAndNavigate(nav);
-                              }
                             } catch (e) {
                               scaffold.showSnackBar(SnackBar(content: Text('Facebook sign-in failed: $e')));
                             } finally {
@@ -333,35 +373,15 @@ Future<void> _ensureProfileCompletedAndNavigate(NavigatorState nav) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) return;
 
-  // Prefer backend check if we have a backend JWT saved
-  Map<String, dynamic>? backendResp;
-  try {
-    final jwt = AuthStorage.token;
-    if (jwt != null) {
-      backendResp = await BackendApi.getMe(jwt: jwt);
-    }
-  } catch (e) {
-    print('Backend /me check failed: $e');
-    backendResp = null;
-  }
-
   Map<String, dynamic> data = {};
-  if (backendResp != null) {
-    // backend responds { hasProfile: bool, profile: {...} }
-    final hasProfile = backendResp['hasProfile'] as bool? ?? false;
-    if (!hasProfile) {
-      final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
-      if (saved == true) {
-        nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
-      }
-      return;
-    }
-    // profile exists -> go to dashboard
-    nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
-    return;
-  } else {
+  try {
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     data = doc.data() ?? {};
+  } catch (e) {
+    // If Firestore rules block reads (permission-denied) or network fails,
+    // proceed into app — backend should own profile reconciliation.
+    // Avoid surfacing the raw firestore error to the user here.
+    data = {};
   }
 
   // Check multiple locations for a name/email to consider profile complete
@@ -385,16 +405,65 @@ Future<void> _ensureProfileCompletedAndNavigate(NavigatorState nav) async {
     return null;
   }
 
+  bool needsInputInformation(Map<String, dynamic> d) {
+    // The input_information flow stores fields under the 'profile' map.
+    final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+    // Accept values either at top-level or under profile
+    dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+
+    final age = getField('age');
+    final gender = getField('gender');
+    final weightKg = getField('weightKg');
+    final heightCm = getField('heightCm');
+    final idealWeightKg = getField('idealWeightKg');
+    final deadline = getField('deadline');
+
+    // If any required onboarding field is missing or empty, we need the input flow.
+    if (age == null) return true;
+    if (gender == null || gender.toString().trim().isEmpty) return true;
+    if (weightKg == null) return true;
+    if (heightCm == null) return true;
+    if (idealWeightKg == null) return true;
+    if (deadline == null || deadline.toString().trim().isEmpty) return true;
+    return false;
+  }
+
+  bool needsOnboarding(Map<String, dynamic> d) {
+    // Onboarding expects trainingIntensity, dietPlan and a fullName under profile
+    final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+    dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+    final training = getField('trainingIntensity');
+    final diet = getField('dietPlan');
+    final onboardingName = getField('fullName') ?? getField('displayName') ?? getField('name');
+    if (training == null || training.toString().trim().isEmpty) return true;
+    if (diet == null || diet.toString().trim().isEmpty) return true;
+    if (onboardingName == null || onboardingName.toString().trim().isEmpty) return true;
+    return false;
+  }
+
   final hasName = resolveName(data) != null;
 
-  // If profile missing, open EditProfilePage; if user cancels, remain on Login screen
+  // If onboarding is missing, route user through onboarding contents first
+  if (needsOnboarding(data)) {
+    nav.pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+    return;
+  }
+
+  // If input-information is missing, route the user into that flow
+  if (needsInputInformation(data)) {
+    // Replace the login route with the onboarding input flow
+    nav.pushReplacement(MaterialPageRoute(builder: (_) => const WelcomeScreen()));
+    return;
+  }
+
+  // If profile is missing a display name, open EditProfilePage; if user cancels, remain on Login screen
   if (!hasName) {
     final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
     if (saved == true) {
       // reload doc and continue
       await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      // navigate into app
-      nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+      // navigate into the 5-tab home
+      nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
     } else {
       // user cancelled: do not auto-navigate into app
       return;
@@ -402,6 +471,6 @@ Future<void> _ensureProfileCompletedAndNavigate(NavigatorState nav) async {
     return;
   }
 
-  // profile exists: go straight into app
-  nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+  // profile exists and no onboarding required: go straight into the 5-tab home
+  nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
 }

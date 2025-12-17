@@ -77,18 +77,45 @@ class _WaterViewState extends State<WaterView> with TickerProviderStateMixin {
 
     // Initialize DiaryService when auth state available
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      // always cancel previous diary subscription when auth changes
       _diarySub?.cancel();
       if (user != null) {
         diaryService = DiaryService(FirebaseFirestore.instance, user.uid);
-        _diarySub = diaryService.streamDiary(DateTime.now()).listen((d) {
+        // protect the stream from throwing unhandled exceptions by handling errors
+        final safeStream = diaryService.streamDiary(DateTime.now()).handleError((e) {
+          debugPrint('WaterView: diary stream error (handleError): $e');
+          // swallow errors here; we'll also report via onError below
+        });
+
+        _diarySub = safeStream.listen((d) {
           if (d != null) {
+            if (!mounted) return;
             setState(() {
               currentAmount = d.water?.consumedMl.toDouble() ?? currentAmount;
               dailyGoal = d.water?.dailyGoalMl ?? dailyGoal;
             });
           }
+        }, onError: (e) {
+          // catch permission-denied and other errors from the listen
+          debugPrint('WaterView: diary listen error: $e');
+          if (!mounted) return;
+          // reset to safe defaults so UI remains stable
+          setState(() {
+            currentAmount = 0;
+            dailyGoal = 3500;
+          });
+        });
+      } else {
+        // no user -> reset values and avoid subscribing
+        if (!mounted) return;
+        setState(() {
+          currentAmount = 0;
+          dailyGoal = 3500;
         });
       }
+    }, onError: (e) {
+      debugPrint('WaterView: authStateChanges error: $e');
+      // keep UI stable on auth stream errors
     });
   }
   @override
