@@ -42,7 +42,8 @@ export const uploadFileController = async (req, res) => {
 
         let aiData;
         try {
-            aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 12000, retries: 2 });
+            // Allow longer timeout for inference-heavy models
+            aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 30000, retries: 3 });
         } catch (err) {
             // log and notify user if auth
             console.error('AI service error:', err?.message || err, err?.raw ? `rawLen=${String(err.raw).slice(0, 200)}` : '');

@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/apis/api_service.dart';
+import 'package:best_flutter_ui_templates/services/backend_api.dart';
+import 'package:best_flutter_ui_templates/services/auth_storage.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/constants/constants.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/hive/boxes.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/hive/chat_history.dart';
@@ -68,6 +70,9 @@ class ChatProvider extends ChangeNotifier {
   String get modelType => _modelType;
 
   bool get isLoading => _isLoading;
+
+  // cache recently deleted conversations for undo
+  final Map<String, Map<String, dynamic>> _recentlyDeletedConversations = {};
 
   // setters
 
@@ -187,6 +192,310 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  // edit a single message (user message) both in memory and in Hive
+  Future<void> editMessage({required String chatId, required String messageId, required String newText}) async {
+    // find in memory
+    try {
+      final target = _inChatMessages.firstWhere((m) => m.messageId == messageId && m.role == Role.user);
+      target.message = StringBuffer(newText);
+      notifyListeners();
+
+      // persist: open messages box and update the map entry
+      final messagesBox = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
+      // find the entry index by matching stored map 'messageId'
+      final keys = messagesBox.keys.toList();
+      for (var k in keys) {
+        final stored = messagesBox.get(k);
+        try {
+          final storedId = stored != null && (stored is Map && stored.containsKey('messageId')) ? stored['messageId']?.toString() : null;
+          if (storedId != null && storedId == messageId) {
+            final updated = Map<String, dynamic>.from(stored as Map)
+              ..['message'] = newText;
+            await messagesBox.put(k, updated);
+            break;
+          }
+        } catch (e) {
+          // ignore malformed entries
+        }
+      }
+      await messagesBox.close();
+      // if this edited message is the last in the in-memory messages, update chat history summary
+      try {
+        if (_inChatMessages.isNotEmpty) {
+          final last = _inChatMessages.last;
+          if (last.messageId == messageId) {
+            final historyBox = Boxes.getChatHistory();
+            final histKeys = historyBox.keys.toList();
+            for (var hk in histKeys) {
+              final val = historyBox.get(hk);
+              try {
+                if (val != null && val.chatId == chatId) {
+                  final updatedHistory = ChatHistory(
+                    chatId: val.chatId,
+                    prompt: val.prompt,
+                    response: newText,
+                    imagesUrls: val.imagesUrls,
+                    timestamp: DateTime.now(),
+                  );
+                  await historyBox.put(hk, updatedHistory);
+                  break;
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+    } catch (e) {
+      log('[ChatProvider] editMessage failed: $e');
+    }
+  }
+
+  // Edit message and optionally ask backend AI to re-analyze and return a new assistant reply
+  Future<void> editMessageAndRefetchAi({required String chatId, required String messageId, required String newText, required String jwt}) async {
+    // first update the message locally
+    await editMessage(chatId: chatId, messageId: messageId, newText: newText);
+
+    // prepare history for backend call
+    try {
+      final historyPayload = inChatMessages
+          .where((m) => m.role == Role.user || m.role == Role.assistant)
+          .map((m) => {
+                'role': m.role == Role.user ? 'user' : 'assistant',
+                'content': m.message.toString(),
+              })
+          .toList();
+
+      final resp = await BackendApi.postAiChat(jwt: jwt, message: newText, history: historyPayload);
+      final reply = (resp['reply'] ?? '') as String;
+      final finalReply = (reply.trim().isEmpty) ? 'Xin lỗi, tôi chưa nhận được phản hồi. Vui lòng thử lại.' : reply;
+
+      // find the assistant message that follows the edited user message
+      for (var i = 0; i < _inChatMessages.length; i++) {
+        final m = _inChatMessages[i];
+        if (m.role == Role.user && m.messageId == messageId) {
+          // open messages box for persistence
+          final messagesBox = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
+
+          // if there's an assistant message immediately after, update it
+          if (i + 1 < _inChatMessages.length && _inChatMessages[i + 1].role == Role.assistant) {
+            final assistant = _inChatMessages[i + 1];
+            assistant.message = StringBuffer(finalReply);
+            notifyListeners();
+
+            // find assistant entry in box and update by messageId
+            final keys = messagesBox.keys.toList();
+            for (var k in keys) {
+              final stored = messagesBox.get(k);
+              try {
+                final storedId = stored != null && (stored is Map && stored.containsKey('messageId')) ? stored['messageId']?.toString() : null;
+                if (storedId != null && storedId == assistant.messageId) {
+                  final updated = Map<String, dynamic>.from(stored as Map)
+                    ..['message'] = finalReply;
+                  await messagesBox.put(k, updated);
+                  break;
+                }
+              } catch (_) {}
+            }
+
+            // update chat history summary
+            try {
+              final historyBox = Boxes.getChatHistory();
+              final val = historyBox.get(chatId);
+              if (val != null) {
+                final updatedHistory = ChatHistory(
+                  chatId: val.chatId,
+                  prompt: val.prompt,
+                  response: finalReply,
+                  imagesUrls: val.imagesUrls,
+                  timestamp: DateTime.now(),
+                );
+                await historyBox.put(chatId, updatedHistory);
+              }
+            } catch (_) {}
+
+            await messagesBox.close();
+          } else {
+            // No assistant present after edited user message — create one and persist
+            final newAssistantId = const Uuid().v4();
+            final assistant = Message(
+              messageId: newAssistantId,
+              chatId: chatId,
+              role: Role.assistant,
+              message: StringBuffer(finalReply),
+              imagesUrls: [],
+              timeSent: DateTime.now(),
+            );
+
+            // insert assistant into in-memory messages right after the edited user message
+            final insertIndex = (i + 1 <= _inChatMessages.length) ? i + 1 : _inChatMessages.length;
+            _inChatMessages.insert(insertIndex, assistant);
+            notifyListeners();
+
+            // persist the new assistant message
+            try {
+              await messagesBox.add(assistant.toMap());
+              // update chat history
+              final historyBox = Boxes.getChatHistory();
+              final val = historyBox.get(chatId);
+              if (val != null) {
+                final updatedHistory = ChatHistory(
+                  chatId: val.chatId,
+                  prompt: val.prompt,
+                  response: finalReply,
+                  imagesUrls: val.imagesUrls,
+                  timestamp: DateTime.now(),
+                );
+                await historyBox.put(chatId, updatedHistory);
+              } else {
+                // create a new history entry
+                final chatHistory = ChatHistory(
+                  chatId: chatId,
+                  prompt: newText,
+                  response: finalReply,
+                  imagesUrls: [],
+                  timestamp: DateTime.now(),
+                );
+                await historyBox.put(chatId, chatHistory);
+              }
+            } catch (_) {}
+
+            await messagesBox.close();
+          }
+
+          break;
+        }
+      }
+    } catch (e) {
+      log('[ChatProvider] editMessageAndRefetchAi failed: $e');
+    }
+  }
+
+  // delete entire conversation: messages box + chat history entry
+  Future<void> deleteConversation({required String chatId}) async {
+    try {
+      // delete messages box
+      if (Hive.isBoxOpen('${Constants.chatMessagesBox}$chatId')) {
+        await Hive.box('${Constants.chatMessagesBox}$chatId').clear();
+        await Hive.box('${Constants.chatMessagesBox}$chatId').close();
+      } else {
+        final b = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
+        await b.clear();
+        await b.close();
+      }
+
+      // remove from chat history
+      final historyBox = Boxes.getChatHistory();
+      final keys = historyBox.keys.toList();
+      for (var k in keys) {
+        final val = historyBox.get(k);
+        try {
+          if (val != null && val.chatId == chatId) {
+            await historyBox.delete(k);
+            break;
+          }
+        } catch (_) {}
+      }
+
+      // clear in-memory messages if current
+      if (_currentChatId == chatId) {
+        _inChatMessages.clear();
+        _currentChatId = '';
+        notifyListeners();
+      }
+    } catch (e) {
+      log('[ChatProvider] deleteConversation failed: $e');
+    }
+  }
+
+  // Delete conversation with undo support. It caches the messages and history in memory for a short time.
+  Future<void> deleteConversationWithUndo({required BuildContext context, required String chatId, Duration undoDuration = const Duration(seconds: 6)}) async {
+    try {
+      // open messages box and read all entries
+      final messagesBox = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
+      final cached = <dynamic>[];
+      for (var k in messagesBox.keys) {
+        cached.add(messagesBox.get(k));
+      }
+
+      // cache chat history
+      final historyBox = Boxes.getChatHistory();
+      final historyVal = historyBox.get(chatId);
+
+      // store in the local map
+      _recentlyDeletedConversations[chatId] = {
+        'messages': cached,
+        'history': historyVal,
+      };
+
+      // perform actual deletion
+      await deleteConversation(chatId: chatId);
+
+      // show snackbar with undo
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Cuộc hội thoại đã bị xóa'),
+          action: SnackBarAction(
+            label: 'Hoàn tác',
+            onPressed: () async {
+              // restore cached data
+              final saved = _recentlyDeletedConversations.remove(chatId);
+              if (saved != null) {
+                // restore messages
+                final messagesBox = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
+                for (var msg in saved['messages'] as List) {
+                  await messagesBox.add(msg);
+                }
+
+                // restore history
+                final historyBox = Boxes.getChatHistory();
+                final hist = saved['history'];
+                if (hist != null) {
+                  await historyBox.put(chatId, hist);
+                }
+
+                await messagesBox.close();
+              }
+            },
+          ),
+          duration: undoDuration,
+        ),
+      );
+
+      // after duration, clear cache if not undone
+      Future.delayed(undoDuration, () {
+        _recentlyDeletedConversations.remove(chatId);
+      });
+    } catch (e) {
+      log('[ChatProvider] deleteConversationWithUndo failed: $e');
+    }
+  }
+
+  // delete a single message (user message) both in memory and in Hive
+  Future<void> deleteMessage({required String chatId, required String messageId}) async {
+    try {
+      _inChatMessages.removeWhere((m) => m.messageId == messageId && m.role == Role.user);
+      notifyListeners();
+
+      final messagesBox = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
+      final keys = messagesBox.keys.toList();
+      for (var k in keys) {
+        final stored = messagesBox.get(k);
+        try {
+          final storedId = stored != null && (stored is Map && stored.containsKey('messageId')) ? stored['messageId']?.toString() : null;
+          if (storedId != null && storedId == messageId) {
+            await messagesBox.delete(k);
+            break;
+          }
+        } catch (e) {
+          // ignore malformed entries
+        }
+      }
+      await messagesBox.close();
+    } catch (e) {
+      log('[ChatProvider] deleteMessage failed: $e');
+    }
+  }
+
   // prepare chat room
   Future<void> prepareChatRoom({
     required bool isNewChat,
@@ -270,8 +579,64 @@ class ChatProvider extends ChangeNotifier {
       setCurrentChatId(newChatId: chatId);
     }
 
-// ? change is here
-    // send the message to the model and wait for the response
+    // prepare assistant placeholder message so UI shows a reply in progress
+    final assistantMessage = userMessage.copyWith(
+      messageId: assistantMessageId.toString(),
+      role: Role.assistant,
+      message: StringBuffer(),
+      timeSent: DateTime.now(),
+    );
+    _inChatMessages.add(assistantMessage);
+    notifyListeners();
+
+    // If backend JWT available, forward to backend AI endpoint for personalized reply
+    try {
+      final jwt = AuthStorage.token; // read backend JWT from AuthStorage
+      if (jwt != null && jwt.isNotEmpty) {
+        // build a simple history payload: list of { role, content }
+        final historyPayload = inChatMessages
+            .where((m) => m.role == Role.user || m.role == Role.assistant)
+            .map((m) => {
+                  'role': m.role == Role.user ? 'user' : 'assistant',
+                  'content': m.message.toString(),
+                })
+            .toList();
+
+        // call backend
+        log('[ChatProvider] calling backend /ai/chat with message: ${message.length > 80 ? message.substring(0, 80) : message}');
+        final resp = await BackendApi.postAiChat(jwt: jwt, message: message, history: historyPayload);
+        final reply = (resp['reply'] ?? '') as String;
+        log('[ChatProvider] backend reply length=${reply.length}');
+
+        // Defensive: if backend returned empty reply, show fallback message
+        final finalReply = (reply.trim().isEmpty) ? 'Xin lỗi, tôi chưa nhận được phản hồi. Vui lòng thử lại.' : reply;
+
+        // write reply into assistant placeholder
+        try {
+          final target = _inChatMessages.firstWhere((element) => element.messageId == assistantMessage.messageId && element.role == Role.assistant);
+          target.message = StringBuffer(finalReply);
+        } catch (e) {
+          log('[ChatProvider] failed to write assistant reply into inChatMessages: $e');
+        }
+        notifyListeners();
+
+        // persist messages
+        await saveMessagesToDB(
+          chatID: chatId,
+          userMessage: userMessage,
+          assistantMessage: assistantMessage.copyWith(message: StringBuffer(finalReply)),
+          messagesBox: messagesBox,
+        );
+
+        setLoading(value: false);
+        return;
+      }
+    } catch (e) {
+      log('[ChatProvider] backend call failed: $e');
+      // ignore and fallback to local model streaming
+    }
+
+    // fallback: use existing local model streaming flow
     await sendMessageAndWaitForResponse(
       message: message,
       chatId: chatId,
@@ -304,17 +669,21 @@ class ChatProvider extends ChangeNotifier {
       isTextOnly: isTextOnly,
     );
 
-    // assistant message
-    final assistantMessage = userMessage.copyWith(
-      messageId: modelMessageId,
-      role: Role.assistant,
-      message: StringBuffer(),
-      timeSent: DateTime.now(),
-    );
-
-    // add this message to the list on inChatMessages
-    _inChatMessages.add(assistantMessage);
-    notifyListeners();
+    // assistant message: if a placeholder already exists (created earlier), reuse it
+    Message assistantMessage;
+    try {
+      assistantMessage = _inChatMessages.firstWhere((element) => element.messageId == modelMessageId && element.role == Role.assistant);
+    } catch (_) {
+      assistantMessage = userMessage.copyWith(
+        messageId: modelMessageId,
+        role: Role.assistant,
+        message: StringBuffer(),
+        timeSent: DateTime.now(),
+      );
+      // add this message to the list on inChatMessages
+      _inChatMessages.add(assistantMessage);
+      notifyListeners();
+    }
 
     // wait for stream response
     chatSession.sendMessageStream(content).asyncMap((event) {
@@ -344,6 +713,11 @@ class ChatProvider extends ChangeNotifier {
       // set loading
       setLoading(value: false);
     });
+
+    // If assistant message is still empty after streaming, log fallback for diagnostics
+    if (assistantMessage.message.toString().trim().isEmpty) {
+      log('[ChatProvider] assistant message empty after streaming - possible empty backend reply or streaming failure');
+    }
   }
 
   // save messages to hive db
@@ -439,7 +813,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   // init Hive box
-  static initHive() async {
+  static Future<void> initHive() async {
     final dir = await path.getApplicationDocumentsDirectory();
     Hive.init(dir.path);
     await Hive.initFlutter(Constants.geminiDB);

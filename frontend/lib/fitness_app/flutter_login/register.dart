@@ -9,7 +9,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../profile/edit_profile.dart';
 import '../input_information/welcome_screen.dart';
 import '../welcome/onboarding_screen.dart';
-import '../my_diary/my_diary_screen.dart';
 import '../fitness_app_home_screen.dart';
 
 class RegisterPage extends StatefulWidget {

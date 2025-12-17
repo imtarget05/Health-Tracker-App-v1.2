@@ -3,9 +3,10 @@
 import { setTimeout as wait } from 'timers/promises';
 
 const defaultOptions = {
-    timeout: 10000, // ms
-    retries: 2,
-    backoffMs: 250,
+    // Increased default timeout and retries to support longer model inference
+    timeout: 30000, // ms (30s)
+    retries: 3,
+    backoffMs: 500,
 };
 
 async function postPredict(url, fileBuffer, opts = {}) {

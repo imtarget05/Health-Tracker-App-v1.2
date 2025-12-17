@@ -9,6 +9,7 @@ const router = express.Router();
 router.post("/chat", protectRoute, chatWithAiCoach);
 
 // Nếu muốn thử không cần login, có thể thêm:
-// router.post("/chat-public", chatWithAiCoach);
+// Note: public /chat-public was used for dev testing but has been removed to
+// avoid accidental exposure. Use authenticated POST /ai/chat instead.
 
 export default router;

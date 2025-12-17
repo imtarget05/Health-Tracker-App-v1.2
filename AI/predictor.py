@@ -125,66 +125,140 @@ class FoodPredictor:
             }
         
         try:
-            # Convert bytes to numpy array
+            # Convert bytes to PIL image and ensure RGB
             image = Image.open(io.BytesIO(image_bytes))
             if image.mode != 'RGB':
                 image = image.convert('RGB')
-            
+
             image_array = np.array(image)
             image_array_bgr = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
-            
+
             # Get image dimensions
             h, w = image_array.shape[:2]
             img_area = h * w
-            
-            # Run detection với conf thấp hơn (giống khi train/val)
-            results = self.model(
-                image_array_bgr,
-                conf=self.conf_threshold,   # 0.25
-                verbose=False
-            )
 
-            logger.info(f"🔍 Raw boxes from YOLO: {len(results[0].boxes)}")
-            
-            detections = []
-            total_nutrition = {
-                'calories': 0.0, 'protein': 0.0, 'fat': 0.0, 
-                'carbs': 0.0, 'fiber': 0.0, 'sugar': 0.0
-            }
-            
-            if len(results[0].boxes) == 0:
+            # Multi-crop / multi-scale inference
+            crops = []
+            # full image
+            crops.append({'img': image_array_bgr, 'offset': (0, 0)})
+
+            # center crop 0.8
+            def center_crop(arr, scale=0.8):
+                hh, ww = arr.shape[:2]
+                ch = int(hh * scale)
+                cw = int(ww * scale)
+                y0 = (hh - ch) // 2
+                x0 = (ww - cw) // 2
+                return arr[y0:y0+ch, x0:x0+cw], (x0, y0)
+
+            for s in [0.9, 0.8, 0.7]:
+                try:
+                    cropped, (ox, oy) = center_crop(image_array_bgr, scale=s)
+                    crops.append({'img': cropped, 'offset': (ox, oy), 'scale': s})
+                except Exception:
+                    pass
+
+            all_detections = []
+
+            for c in crops:
+                try:
+                    results = self.model(c['img'], conf=self.conf_threshold, verbose=False)
+                except Exception as e:
+                    logger.warning(f"Model inference failed on crop: {e}")
+                    continue
+
+                boxes = results[0].boxes
+                logger.info(f"🔍 Raw boxes from YOLO (crop): {len(boxes)}")
+
+                for box in boxes:
+                    class_id = int(box.cls[0])
+                    confidence = float(box.conf[0])
+                    bbox = box.xyxy[0].cpu().numpy()
+
+                    # If crop has offset, adjust box coordinates back to original image coords
+                    ox, oy = c.get('offset', (0, 0))
+                    if 'scale' in c:
+                        s = c['scale']
+                        # when cropping we used direct pixel coords, no scaling needed for offset adjust
+                    bbox_adj = [bbox[0] + ox, bbox[1] + oy, bbox[2] + ox, bbox[3] + oy]
+
+                    all_detections.append({
+                        'class_id': class_id,
+                        'confidence': confidence,
+                        'bbox': bbox_adj,
+                    })
+
+            if len(all_detections) == 0:
                 return {
                     'success': True,
                     'detections': [],
-                    'total_nutrition': total_nutrition,
+                    'total_nutrition': {
+                        'calories': 0.0, 'protein': 0.0, 'fat': 0.0,
+                        'carbs': 0.0, 'fiber': 0.0, 'sugar': 0.0
+                    },
                     'items_count': 0,
                     'message': 'No food items detected'
                 }
-            
-            for box in results[0].boxes:
-                class_id = int(box.cls[0])
-                confidence = float(box.conf[0])
-                bbox = box.xyxy[0].cpu().numpy()
 
-                # ❌ BỎ bước lọc confidence lần 2 (trước đây <0.3 bị bỏ)
-                # if confidence < 0.3:
-                #     continue
-                
-                # Calculate bounding box area
+            # Simple aggregation: group detections by IoU & class, keep max confidence
+            def iou(boxA, boxB):
+                xA = max(boxA[0], boxB[0])
+                yA = max(boxA[1], boxB[1])
+                xB = min(boxA[2], boxB[2])
+                yB = min(boxA[3], boxB[3])
+                interW = max(0, xB - xA)
+                interH = max(0, yB - yA)
+                interArea = interW * interH
+                boxAArea = max(0, (boxA[2] - boxA[0])) * max(0, (boxA[3] - boxA[1]))
+                boxBArea = max(0, (boxB[2] - boxB[0])) * max(0, (boxB[3] - boxB[1]))
+                union = boxAArea + boxBArea - interArea
+                if union == 0:
+                    return 0
+                return interArea / union
+
+            clusters = []
+            for det in sorted(all_detections, key=lambda x: -x['confidence']):
+                placed = False
+                for cl in clusters:
+                    # if same class and IoU > 0.3, merge
+                    if cl['class_id'] == det['class_id'] and iou(cl['bbox'], det['bbox']) > 0.3:
+                        # keep highest confidence and expand bbox
+                        cl['confidence'] = max(cl['confidence'], det['confidence'])
+                        # expand bbox to include both
+                        cl['bbox'] = [
+                            min(cl['bbox'][0], det['bbox'][0]),
+                            min(cl['bbox'][1], det['bbox'][1]),
+                            max(cl['bbox'][2], det['bbox'][2]),
+                            max(cl['bbox'][3], det['bbox'][3])
+                        ]
+                        placed = True
+                        break
+                if not placed:
+                    clusters.append({
+                        'class_id': det['class_id'],
+                        'confidence': det['confidence'],
+                        'bbox': det['bbox']
+                    })
+
+            detections = []
+            total_nutrition = {'calories': 0.0, 'protein': 0.0, 'fat': 0.0, 'carbs': 0.0, 'fiber': 0.0, 'sugar': 0.0}
+
+            for cl in clusters:
+                class_id = cl['class_id']
+                confidence = cl['confidence']
+                bbox = cl['bbox']
+
                 bbox_w = bbox[2] - bbox[0]
                 bbox_h = bbox[3] - bbox[1]
-                bbox_area = bbox_w * bbox_h
-                
+                bbox_area = max(0, bbox_w * bbox_h)
+
                 category = self.food_categories[class_id]
                 portion_g = self.estimate_portion(bbox_area, img_area)
-                
-                # Calculate nutrition
                 nutrition = self._calculate_nutrition(category, portion_g)
-                
-                # Add to totals
+
                 for key in total_nutrition:
                     total_nutrition[key] += nutrition[key]
-                
+
                 detection_info = {
                     'food': category,
                     'confidence': round(confidence, 3),
@@ -192,12 +266,10 @@ class FoodPredictor:
                     'bbox': [float(coord) for coord in bbox],
                     'nutrition': nutrition
                 }
-                
                 detections.append(detection_info)
-            
-            # Round total nutrition values
+
             total_nutrition = {k: round(v, 1) for k, v in total_nutrition.items()}
-            
+
             return {
                 'success': True,
                 'detections': detections,

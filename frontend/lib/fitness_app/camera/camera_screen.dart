@@ -18,6 +18,7 @@ class _ScanScreenState extends State<ScanScreen> {
   XFile? _selectedImage;
   bool _isLoading = false;
   Map<String, dynamic>? _prediction;
+  bool _cancelled = false;
 
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.camera);
@@ -47,6 +48,7 @@ class _ScanScreenState extends State<ScanScreen> {
     if (_selectedImage == null) return;
 
     setState(() => _isLoading = true);
+  setState(() => _cancelled = false);
 
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
@@ -55,19 +57,45 @@ class _ScanScreenState extends State<ScanScreen> {
       if (isOnline) {
         final response = await ApiService.predict(_selectedImage!.path);
 
-        if (response != null) {
-          setState(() {
-            _prediction = response;
-          });
+        // If user cancelled during upload/processing, ignore late response
+        if (_cancelled) return;
 
-          final result = ScanResult(
-            imagePath: _selectedImage!.path,
-            predictedClass: response['class'],
-            confidence: response['confidence'],
-            timestamp: DateTime.now(),
-            synced: true,
-          );
-          await DBService.addResult(result);
+        if (response != null) {
+          // backend returns { detections: [...], mainFood: {...}, totalNutrition, ... }
+          Map<String, dynamic>? display;
+          if (response['mainFood'] != null) {
+            final mf = response['mainFood'] as Map<String, dynamic>;
+            display = {
+              'class': mf['food'] ?? 'Unknown',
+              'confidence': (mf['confidence'] is num) ? (mf['confidence'] as num).toDouble() : 0.0,
+              'nutrition': mf['nutrition'] ?? {},
+            };
+          } else if (response['detections'] is List && (response['detections'] as List).isNotEmpty) {
+            final first = (response['detections'] as List).first as Map<String, dynamic>;
+            display = {
+              'class': first['food'] ?? 'Unknown',
+              'confidence': (first['confidence'] is num) ? (first['confidence'] as num).toDouble() : 0.0,
+              'nutrition': first['nutrition'] ?? {},
+            };
+          }
+
+          if (display != null) {
+            setState(() {
+              _prediction = display;
+            });
+
+            final result = ScanResult(
+              imagePath: _selectedImage!.path,
+              predictedClass: display['class'],
+              confidence: display['confidence'],
+              timestamp: DateTime.now(),
+              synced: true,
+            );
+            await DBService.addResult(result);
+          } else {
+            // No detections
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No food detected')));
+          }
         }
       } else {
         if (mounted) {
@@ -111,7 +139,7 @@ class _ScanScreenState extends State<ScanScreen> {
         );
       }
     } finally {
-      if (mounted) {
+      if (mounted && !_cancelled) {
         setState(() => _isLoading = false);
       }
     }
@@ -179,6 +207,23 @@ class _ScanScreenState extends State<ScanScreen> {
               )
                   : const Text('Submit'),
             ),
+            if (_isLoading) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Processing image, this may take up to 30 seconds. You can cancel if you wish.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _cancelled = true;
+                    _isLoading = false;
+                  });
+                },
+                child: const Text('Cancel'),
+              ),
+            ],
             if (_prediction != null) ...[
               const SizedBox(height: 24),
               Card(

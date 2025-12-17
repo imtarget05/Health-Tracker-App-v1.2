@@ -22,9 +22,9 @@ class ChatMessages extends StatelessWidget {
       itemBuilder: (context, index) {
         // compare with timeSent before showing the list
         final message = chatProvider.inChatMessages[index];
-        return message.role.name == Role.user.name
-            ? MyMessageWidget(message: message)
-            : AssistantMessageWidget(message: message.message.toString());
+    return message.role.name == Role.user.name
+      ? MyMessageWidget(message: message, chatProvider: chatProvider, chatId: chatProvider.currentChatId)
+      : AssistantMessageWidget(message: message.message.toString());
       },
     );
   }

@@ -355,7 +355,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       _remoteProfileSub?.cancel();
       final docRef = _firestore.collection('users').doc(user.uid);
-      _remoteProfileSub = docRef.snapshots().listen((snap) {
+      final safeStream = docRef.snapshots().handleError((e) {
+        debugPrint('EditProfile: remote profile stream error (handleError): $e');
+      });
+      _remoteProfileSub = safeStream.listen((snap) {
         if (!snap.exists) return;
         final data = snap.data() as Map<String, dynamic>?;
         if (data == null) return;

@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/providers/chat_provider.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/utility/animated_dialog.dart';
@@ -50,21 +49,31 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context, chatProvider, child) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Chat with Gemini'),
+            title: const Text('Trò chuyện'),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: 'Tạo cuộc hội thoại mới',
+                onPressed: () async {
+                  // create a new chat
+                  await chatProvider.prepareChatRoom(isNewChat: true, chatID: '');
+                },
+              ),
               if (chatProvider.inChatMessages.isNotEmpty)
                 IconButton(
-                  icon: const Icon(CupertinoIcons.add),
+                  icon: const Icon(Icons.delete_forever),
+                  tooltip: 'Xoá cuộc hội thoại',
                   onPressed: () {
                     showMyAnimatedDialog(
                       context: context,
-                      title: 'Start New Chat',
-                      content: 'Are you sure you want to start a new chat?',
-                      actionText: 'Yes',
+                      title: 'Xoá cuộc hội thoại',
+                      content: 'Bạn có chắc muốn xoá cuộc hội thoại này? Hành động này sẽ xoá toàn bộ tin nhắn.',
+                      actionText: 'Xoá',
                       onActionPressed: (value) async {
                         if (value) {
-                          await chatProvider.prepareChatRoom(
-                              isNewChat: true, chatID: '');
+                          // delete the whole conversation with undo support and go back
+                          await chatProvider.deleteConversationWithUndo(context: context, chatId: chatProvider.currentChatId);
+                          if (mounted) Navigator.of(context).pop();
                         }
                       },
                     );

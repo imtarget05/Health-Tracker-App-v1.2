@@ -91,11 +91,11 @@ class _BottomChatFieldState extends State<BottomChatField> {
                 onPressed: () {
                   if (hasImages) {
                     // show the delete dialog
-                    showMyAnimatedDialog(
-                        context: context,
-                        title: 'Delete Images',
-                        content: 'Are you sure you want to delete the images?',
-                        actionText: 'Delete',
+            showMyAnimatedDialog(
+              context: context,
+              title: 'Xoá hình',
+              content: 'Bạn có chắc muốn xoá các hình này?',
+              actionText: 'Xoá',
                         onActionPressed: (value) {
                           if (value) {
                             widget.chatProvider.setImagesFileList(
@@ -131,8 +131,8 @@ class _BottomChatFieldState extends State<BottomChatField> {
                             );
                           }
                         },
-                  decoration: InputDecoration.collapsed(
-                      hintText: 'Enter a prompt...',
+          decoration: InputDecoration.collapsed(
+            hintText: 'Nhập nội dung...',
                       border: OutlineInputBorder(
                         borderSide: BorderSide.none,
                         borderRadius: BorderRadius.circular(30),

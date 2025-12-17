@@ -14,15 +14,35 @@ import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/provi
 import 'screens/health_check_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' as cf;
+import 'package:firebase_auth/firebase_auth.dart' as fa;
 import 'fitness_app/debug/profile_sync_debug.dart';
 import 'services/profile_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
+  // Optionally enable Firebase Emulator wiring via --dart-define=USE_FIREBASE_EMULATOR=1
+  final useEmulator = const String.fromEnvironment('USE_FIREBASE_EMULATOR', defaultValue: '0') == '1';
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  if (useEmulator) {
+    try {
+      // Firestore emulator default host: localhost:8080
+      cf.FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+    } catch (e) {
+      print('Could not wire Firestore emulator: $e');
+    }
+    try {
+      // Auth emulator default host: localhost:9099
+      fa.FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+    } catch (e) {
+      print('Could not wire Auth emulator: $e');
+    }
+    print('⚠️ Firebase emulator wiring enabled (USE_FIREBASE_EMULATOR=1)');
+  }
   // Initialize profile sync service (Hive + optional firebase init inside service)
   try {
     await ProfileSyncService.instance.init();

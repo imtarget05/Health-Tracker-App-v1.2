@@ -30,6 +30,7 @@ class _BodyMeasurementViewState extends State<BodyMeasurementView> with TickerPr
     });
   }
 
+  @override
   void dispose() {
     timer.cancel();
     super.dispose();

@@ -3,7 +3,7 @@ import './register.dart';
 import './resetpassword.dart';
 
 import '../welcome/onboarding_screen.dart';
-import '../my_diary/my_diary_screen.dart';
+// '../my_diary/my_diary_screen.dart' is not used in this file
 import '../fitness_app_home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
