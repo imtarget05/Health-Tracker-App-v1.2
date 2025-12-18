@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'package:path/path.dart' as p;
+// 'package:path' not used here; removed to silence analyzer
 import '../models/scan_result.dart';
 
 class DBService {

@@ -12,6 +12,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../services/backend_api.dart';
 import '../../services/auth_storage.dart';
 import '../../services/profile_sync_service.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -118,7 +119,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   if (_loading) return;
   final user = _auth.currentUser;
     if (user == null) {
-  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Người dùng chưa đăng nhập')));
+  if (mounted) EventBus.instance.emitError('Người dùng chưa đăng nhập');
       return;
     }
 
@@ -178,7 +179,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   putIfChanged('drinkingTimes', drinkingTimes);
   putIfChanged('deadlineCompleted', deadlineCompleted);
     if (updateData.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không có thay đổi để lưu')));
+  if (mounted) EventBus.instance.emitInfo('Không có thay đổi để lưu');
       setState(() => _loading = false);
       return;
     }
@@ -187,7 +188,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // Try backend first using saved JWT from AuthStorage
     // Basic validation
     if (name.trim().isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên')));
+  if (mounted) EventBus.instance.emitError('Vui lòng nhập tên');
       setState(() => _loading = false);
       return;
     }
@@ -202,7 +203,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           // update local original snapshot
           _originalProfile ??= {};
           _originalProfile!.addAll(updateData);
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật hồ sơ thành công')));
+          if (mounted) EventBus.instance.emitSuccess('Cập nhật hồ sơ thành công');
           setState(() => _loading = false);
           if (mounted) Navigator.of(context).pop(true);
           return;
@@ -241,10 +242,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     for (final k in profileMap.keys) p[k] = profileMap[k];
     _originalProfile!['profile'] = p;
   }
-  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật hồ sơ thành công (lưu cục bộ)')));
+  if (mounted) EventBus.instance.emitSuccess('Cập nhật hồ sơ thành công (lưu cục bộ)');
   if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không thể lưu hồ sơ')));
+  if (mounted) EventBus.instance.emitError('Không thể lưu hồ sơ');
     } finally {
       setState(() => _loading = false);
     }
@@ -598,7 +599,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: email));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép email')));
+                    EventBus.instance.emitInfo('Đã sao chép email');
                   },
                 ),
                 onTap: () => _editField(
@@ -614,7 +615,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: phone));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã sao chép số điện thoại')));
+                    EventBus.instance.emitInfo('Đã sao chép số điện thoại');
                   },
                 ),
                 onTap: () => _editField(

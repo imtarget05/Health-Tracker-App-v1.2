@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class BackendApi {
   // Read BASE_API_URL from .env via flutter_dotenv; fallback to localhost
@@ -25,6 +26,7 @@ class BackendApi {
     });
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+  EventBus.instance.emitSuccess('Kết nối server OK.');
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
 
@@ -40,9 +42,11 @@ class BackendApi {
     });
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      // No toast for routine profile fetchs by default, but keep hookable.
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
 
+    EventBus.instance.emitError('Lấy thông tin người dùng thất bại.');
     throw Exception('getMe failed: ${resp.statusCode} ${resp.body}');
   }
 
@@ -58,8 +62,10 @@ class BackendApi {
         body: jsonEncode({'amountMl': amountMl}));
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      EventBus.instance.emitSuccess('Đã ghi nhận lượng nước.');
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
+    EventBus.instance.emitError('Gửi dữ liệu nước thất bại.');
     throw Exception('postWater failed: ${resp.statusCode} ${resp.body}');
   }
 
@@ -135,9 +141,11 @@ class BackendApi {
         body: jsonEncode(body));
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      EventBus.instance.emitSuccess('Tương tác AI thành công.');
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
 
+    EventBus.instance.emitError('Gửi message AI thất bại.');
     throw Exception('postAiChat failed: ${resp.statusCode} ${resp.body}');
   }
 
@@ -164,15 +172,18 @@ class BackendApi {
         body: jsonEncode(body));
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+  EventBus.instance.emitSuccess('Đăng ký thành công.');
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
 
     // try to parse error message
     try {
       final err = jsonDecode(resp.body);
-      throw Exception(err['message'] ?? resp.body);
+  EventBus.instance.emitError('Đăng ký thất bại.');
+  throw Exception(err['message'] ?? resp.body);
     } catch (_) {
-      throw Exception('signup failed: ${resp.statusCode} ${resp.body}');
+  EventBus.instance.emitError('Đăng ký thất bại.');
+  throw Exception('signup failed: ${resp.statusCode} ${resp.body}');
     }
   }
 }

@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_storage.dart' show AuthStorage;
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 import '../camera/services/api_service.dart';
 import '../camera/services/db_service.dart';
 import '../camera/models/scan_result.dart';
@@ -24,7 +25,7 @@ class _ScanScreenState extends State<ScanScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _prediction;
   bool _cancelled = false;
-  List<ScanResult> _history = [];
+  // history is read via DBService.getAllResults(); keep local field removed to avoid unused warning
 
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.camera);
@@ -133,7 +134,7 @@ class _ScanScreenState extends State<ScanScreen> {
               await DBService.addResult(result);
               await _loadHistory();
             } else {
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No food detected')));
+              EventBus.instance.emitInfo('No food detected');
             }
           } else {
             String bodyText = resp.body;
@@ -143,7 +144,7 @@ class _ScanScreenState extends State<ScanScreen> {
             } catch (_) {}
             throw Exception('upload failed: ${resp.statusCode} - $bodyText');
           }
-        } catch (e) {
+          } catch (e) {
           final result = ScanResult(
             imagePath: _selectedImage!.path,
             predictedClass: 'Error: $e',
@@ -154,19 +155,12 @@ class _ScanScreenState extends State<ScanScreen> {
           await DBService.addResult(result);
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e')),
-            );
+            EventBus.instance.emitError('Error: $e');
           }
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Offline mode: Prediction queued for sync'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          EventBus.instance.emitInfo('Offline mode: Prediction queued for sync');
         }
 
         final result = ScanResult(
@@ -196,9 +190,7 @@ class _ScanScreenState extends State<ScanScreen> {
       await DBService.addResult(result);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        EventBus.instance.emitError('Error: $e');
       }
     } finally {
       if (mounted && !_cancelled) {
@@ -209,15 +201,13 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _loadHistory() async {
     final list = DBService.getAllResults();
-    setState(() {
-      _history = list;
-    });
+  // history displayed in separate HistoryScreen; no local storage needed here
   }
 
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+  // no local history load required; HistoryScreen reads DBService directly
   }
 
   @override

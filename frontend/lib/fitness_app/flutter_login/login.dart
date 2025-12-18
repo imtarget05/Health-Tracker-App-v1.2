@@ -13,6 +13,7 @@ import '../../services/auth_storage.dart';
 import '../../services/google_auth_service.dart';
 import '../../services/facebook_auth_service.dart';
 import '../../services/profile_sync_service.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class LoginPage extends StatefulWidget {
   final String? title;
@@ -207,9 +208,7 @@ class _LoginPageState extends State<LoginPage> {
               await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
             } catch (initErr) {
               setState(() => _isLoading = false);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Firebase init failed: $initErr')),
-              );
+              EventBus.instance.emitError('Firebase init failed: $initErr');
               return;
             }
           }
@@ -236,9 +235,7 @@ class _LoginPageState extends State<LoginPage> {
           await _routeAfterLogin();
         } catch (e) {
           final msg = e is Exception ? e.toString() : 'Login failed';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg)),
-          );
+          EventBus.instance.emitError(msg);
         } finally {
           setState(() => _isLoading = false);
         }
@@ -325,7 +322,7 @@ class _LoginPageState extends State<LoginPage> {
                                   await _routeAfterLogin();
                               }
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Google sign-in failed: $e')));
+                              EventBus.instance.emitError('Google sign-in failed: $e');
                             } finally {
                               setState(() => _isLoading = false);
                             }
@@ -357,7 +354,7 @@ class _LoginPageState extends State<LoginPage> {
                                 await _routeAfterLogin();
                               }
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Facebook sign-in failed: $e')));
+                              EventBus.instance.emitError('Facebook sign-in failed: $e');
                             } finally {
                               setState(() => _isLoading = false);
                             }

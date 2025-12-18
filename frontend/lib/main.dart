@@ -21,6 +21,7 @@ import 'services/profile_sync_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'fitness_app/camera/models/scan_result.dart';
 import 'fitness_app/camera/services/db_service.dart';
+import 'widgets/global_toast.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +79,7 @@ Future<void> main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  runApp(const MyApp());
+  runApp(const GlobalToast(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 import '../../firebase_options.dart';
 
@@ -280,7 +281,6 @@ class _HabitScreenState extends State<HabitScreen>
                   ElevatedButton(
                     onPressed: () async {
                       // validate
-                      final scaffold = ScaffoldMessenger.of(context);
                       final navigator = Navigator.of(context);
 
                       final sleep = double.tryParse(sleepController.text);
@@ -288,15 +288,15 @@ class _HabitScreenState extends State<HabitScreen>
                       final exercise = exerciseController.text.trim();
 
                       if (sleep == null || sleep < 0 || sleep > 24) {
-                        scaffold.showSnackBar(const SnackBar(content: Text('Please choose a valid sleep hours (0-24).')));
+                        EventBus.instance.emitError('Please choose a valid sleep hours (0-24).');
                         return;
                       }
                       if (exercise.isEmpty) {
-                        scaffold.showSnackBar(const SnackBar(content: Text('Please select your favourite exercise.')));
+                        EventBus.instance.emitError('Please select your favourite exercise.');
                         return;
                       }
                       if (water == null || water <= 0) {
-                        scaffold.showSnackBar(const SnackBar(content: Text('Please enter amount of water in ml.')));
+                        EventBus.instance.emitError('Please enter amount of water in ml.');
                         return;
                       }
 
@@ -310,7 +310,7 @@ class _HabitScreenState extends State<HabitScreen>
                         final user = FirebaseAuth.instance.currentUser;
                         if (user == null) {
                           navigator.pop();
-                          scaffold.showSnackBar(const SnackBar(content: Text('Not signed in to Firebase.')));
+                          EventBus.instance.emitError('Not signed in to Firebase.');
                           return;
                         }
 
@@ -330,11 +330,11 @@ class _HabitScreenState extends State<HabitScreen>
                         await doc.set(payload, SetOptions(merge: true));
 
                         navigator.pop();
-                        scaffold.showSnackBar(const SnackBar(content: Text('Saved habit info')));
+                        EventBus.instance.emitSuccess('Saved habit info');
                         navigator.push(MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()));
                       } catch (e, st) {
                         navigator.pop();
-                        scaffold.showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+                        EventBus.instance.emitError('Failed to save: $e');
                         // ignore: avoid_print
                         print(st);
                       }

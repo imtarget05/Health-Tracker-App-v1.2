@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../services/profile_sync_service.dart';
 import '../../services/auth_storage.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 import '../flutter_login/login.dart';
 import 'edit_profile.dart';
 
@@ -139,21 +140,20 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
               animationController: _controller,
               onEdit: () async {
                 if (!mounted) return;
-                final scaffold = ScaffoldMessenger.of(context);
                 final navigator = Navigator.of(context);
                 final saved = await navigator.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
                 if (!mounted) return;
-                if (saved == true) scaffold.showSnackBar(const SnackBar(content: Text('Hồ sơ đã được cập nhật')));
+                if (saved == true) EventBus.instance.emitSuccess('Hồ sơ đã được cập nhật');
               },
               onLogout: () async {
                 final navigator = Navigator.of(context);
                 await FirebaseAuth.instance.signOut();
                 AuthStorage.clear();
                 if (!mounted) return;
+                EventBus.instance.emitInfo('Đã đăng xuất');
                 navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginPage()), (route) => false);
               },
               onPickAvatar: () async {
-                final scaffold = ScaffoldMessenger.of(context);
                 try {
                   final picker = ImagePicker();
                   final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -170,9 +170,9 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                   final payload = {'profile': {'profilePic': downloadUrl}, 'lastUpdated': FieldValue.serverTimestamp()};
                   await doc.set(payload, SetOptions(merge: true));
                   if (!mounted) return;
-                  scaffold.showSnackBar(const SnackBar(content: Text('Ảnh đại diện đã được cập nhật')));
+                  EventBus.instance.emitSuccess('Ảnh đại diện đã được cập nhật');
                 } catch (e) {
-                  if (mounted) scaffold.showSnackBar(SnackBar(content: Text('Không thể cập nhật ảnh: $e')));
+                  if (mounted) EventBus.instance.emitError('Không thể cập nhật ảnh: $e');
                 }
               },
             ),
@@ -230,12 +230,11 @@ class _ProfileScreenState extends State<ProfileScreen> with TickerProviderStateM
                             IconButton(
                               icon: const Icon(Icons.edit),
                               color: FitnessAppTheme.darkerText,
-                              onPressed: () async {
-                                final scaffold = ScaffoldMessenger.of(context);
-                                final navigator = Navigator.of(context);
-                                final saved = await navigator.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
+                onPressed: () async {
+                  final navigator = Navigator.of(context);
+                  final saved = await navigator.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
                                 if (!mounted) return;
-                                if (saved == true) scaffold.showSnackBar(const SnackBar(content: Text('Hồ sơ đã được cập nhật')));
+                                if (saved == true) EventBus.instance.emitSuccess('Hồ sơ đã được cập nhật');
                               },
                             ),
                             ValueListenableBuilder<int>(

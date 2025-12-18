@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 /// Simple Google Sign-In -> Backend helper
 ///
@@ -39,6 +40,8 @@ class GoogleAuthService {
       // Return backend response plus the google idToken/accessToken so the
       // caller can sign in the Firebase client SDK locally.
       final backend = jsonDecode(resp.body) as Map<String, dynamic>;
+      // Emit a global success event; UI will show a toast.
+      EventBus.instance.emitSuccess('Đăng nhập thành công.');
       return {
         'backend': backend,
         'idToken': idToken,
@@ -46,6 +49,7 @@ class GoogleAuthService {
       };
     }
 
+    EventBus.instance.emitError('Đăng nhập thất bại.');
     throw Exception('Backend Google auth failed: ${resp.statusCode} ${resp.body}');
   }
 

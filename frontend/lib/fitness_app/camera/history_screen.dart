@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+// path_provider not required in this file
 import '../camera/models/scan_result.dart';
 import '../camera/services/db_service.dart';
 

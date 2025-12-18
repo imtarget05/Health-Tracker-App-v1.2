@@ -12,6 +12,7 @@ import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/hive/
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/hive/settings.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/hive/user_model.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/models/message.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart' as path;
@@ -430,36 +431,8 @@ class ChatProvider extends ChangeNotifier {
       // perform actual deletion
       await deleteConversation(chatId: chatId);
 
-      // show snackbar with undo
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Cuộc hội thoại đã bị xóa'),
-          action: SnackBarAction(
-            label: 'Hoàn tác',
-            onPressed: () async {
-              // restore cached data
-              final saved = _recentlyDeletedConversations.remove(chatId);
-              if (saved != null) {
-                // restore messages
-                final messagesBox = await Hive.openBox('${Constants.chatMessagesBox}$chatId');
-                for (var msg in saved['messages'] as List) {
-                  await messagesBox.add(msg);
-                }
-
-                // restore history
-                final historyBox = Boxes.getChatHistory();
-                final hist = saved['history'];
-                if (hist != null) {
-                  await historyBox.put(chatId, hist);
-                }
-
-                await messagesBox.close();
-              }
-            },
-          ),
-          duration: undoDuration,
-        ),
-      );
+      // show toast with undo hint and keep cache for potential restoration
+      EventBus.instance.emitInfo('Cuộc hội thoại đã bị xóa — có thể hoàn tác trong vài giây');
 
       // after duration, clear cache if not undone
       Future.delayed(undoDuration, () {

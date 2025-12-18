@@ -6,6 +6,7 @@ import 'dart:async';
 import '../../firebase_options.dart';
 
 import 'login.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 
 class ResetPasswordPage extends StatefulWidget {
@@ -93,9 +94,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // capture context-bound objects before async gaps
-    final scaffold = ScaffoldMessenger.of(context);
-    final nav = Navigator.of(context);
+  // capture context-bound objects before async gaps
+  final nav = Navigator.of(context);
 
     setState(() => _isLoading = true);
     try {
@@ -104,9 +104,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
           await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
         } catch (initErr) {
           setState(() => _isLoading = false);
-          scaffold.showSnackBar(
-            SnackBar(content: Text('Firebase init failed: $initErr')),
-          );
+          EventBus.instance.emitError('Firebase init failed: $initErr');
           return;
         }
       }
@@ -128,9 +126,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         actionCodeSettings: actionCodeSettings,
       );
   setState(() => _isLoading = false);
-  scaffold.showSnackBar(
-        const SnackBar(content: Text('Password reset link sent. Check your email.')),
-      );
+  EventBus.instance.emitSuccess('Password reset link sent. Check your email.');
       await Future.delayed(const Duration(milliseconds: 700));
   nav.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -144,14 +140,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       } else if (e.message != null) {
         msg = e.message!;
       }
-      scaffold.showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+  EventBus.instance.emitError(msg);
     } catch (e) {
       setState(() => _isLoading = false);
-      scaffold.showSnackBar(
-        const SnackBar(content: Text('An error occurred. Please try again.')),
-      );
+  EventBus.instance.emitError('An error occurred. Please try again.');
     }
   }
 

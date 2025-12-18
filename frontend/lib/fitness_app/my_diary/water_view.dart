@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 import '../../models/diary.dart';
 import '../../services/diary_service.dart';
 
@@ -37,18 +38,17 @@ class _WaterViewState extends State<WaterView> with TickerProviderStateMixin {
     // Use DiaryService transaction to increment water by 100ml
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final scaffold = ScaffoldMessenger.of(context);
+  // scaffold not used; toasts are emitted via EventBus
     diaryService.incrementWater(DateTime.now(), 100).catchError((e) {
-      scaffold.showSnackBar(const SnackBar(content: Text('Failed to add water')));
+  EventBus.instance.emitError('Failed to add water');
     });
   }
 
   void decreaseWater() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final scaffold = ScaffoldMessenger.of(context);
     diaryService.incrementWater(DateTime.now(), -100).catchError((e) {
-      scaffold.showSnackBar(const SnackBar(content: Text('Failed to remove water')));
+  EventBus.instance.emitError('Failed to remove water');
     });
   }
 

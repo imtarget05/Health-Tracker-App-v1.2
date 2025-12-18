@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:http/http.dart' as http;
-import 'backend_api.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class FacebookAuthService {
   // Returns backend response map or throws
@@ -64,15 +64,18 @@ class FacebookAuthService {
         body: jsonEncode({'accessToken': tokenValue}));
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      EventBus.instance.emitSuccess('Đăng nhập thành công.');
       return jsonDecode(resp.body) as Map<String, dynamic>;
     }
 
     try {
       final err = jsonDecode(resp.body);
       final msg = err is Map && err.containsKey('message') ? err['message'] : resp.body;
-      throw Exception('Backend Facebook auth failed: ${resp.statusCode} $msg');
+  EventBus.instance.emitError('Đăng nhập thất bại.');
+  throw Exception('Backend Facebook auth failed: ${resp.statusCode} $msg');
     } catch (_) {
-      throw Exception('Backend Facebook auth failed: ${resp.statusCode} ${resp.body}');
+  EventBus.instance.emitError('Đăng nhập thất bại.');
+  throw Exception('Backend Facebook auth failed: ${resp.statusCode} ${resp.body}');
     }
   }
 }

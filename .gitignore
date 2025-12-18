@@ -5,3 +5,11 @@ Health-Tracker-App/
 AI/.venv/
 AI/__pycache__/
 AI/*.pyc
+
+# Ignore dotenv files
+*.env
+.env
+
+# Ignore dataset folder (large data that should not be committed)
+Dataset/
+Dataset/**

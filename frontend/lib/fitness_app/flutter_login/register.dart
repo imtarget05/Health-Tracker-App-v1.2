@@ -10,6 +10,7 @@ import '../profile/edit_profile.dart';
 import '../input_information/welcome_screen.dart';
 import '../welcome/onboarding_screen.dart';
 import '../fitness_app_home_screen.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class RegisterPage extends StatefulWidget {
   RegisterPage({super.key, required this.title});
@@ -72,9 +73,8 @@ class _RegisterPageState extends State<RegisterPage> {
     final password = _passwordController.text.trim();
     final phone = _phoneController.text.trim();
 
-    // capture context-bound objects before async gaps
-    final scaffold = ScaffoldMessenger.of(context);
-    final nav = Navigator.of(context);
+  // capture context-bound objects before async gaps
+  final nav = Navigator.of(context);
 
     setState(() {});
 
@@ -96,14 +96,12 @@ class _RegisterPageState extends State<RegisterPage> {
   final backendToken = res['token'] as String?;
   if (backendToken != null) AuthStorage.saveToken(backendToken);
 
-      if (Firebase.apps.isEmpty) {
+        if (Firebase.apps.isEmpty) {
         try {
           await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
         } catch (initErr) {
           if (mounted) nav.pop();
-          scaffold.showSnackBar(
-            SnackBar(content: Text('Firebase init failed: $initErr')),
-          );
+          EventBus.instance.emitError('Firebase init failed: $initErr');
           return;
         }
       }
@@ -117,7 +115,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+        EventBus.instance.emitSuccess('Đăng ký thành công.');
         nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
         return;
       }
@@ -220,7 +218,7 @@ class _RegisterPageState extends State<RegisterPage> {
         }
       }
 
-  if (mounted) scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+  if (mounted) EventBus.instance.emitSuccess('Đăng ký thành công.');
   if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
     } on FirebaseAuthException catch (e) {
   if (mounted) nav.pop();
@@ -234,9 +232,7 @@ class _RegisterPageState extends State<RegisterPage> {
       } else {
         errorMsg = e.message ?? errorMsg;
       }
-      scaffold.showSnackBar(
-        SnackBar(content: Text(errorMsg)),
-      );
+  EventBus.instance.emitError(errorMsg);
     } catch (e) {
   if (mounted) nav.pop();
   String errorMsg = 'Đăng ký thất bại';
@@ -249,9 +245,7 @@ class _RegisterPageState extends State<RegisterPage> {
       } else {
         errorMsg = e.toString();
       }
-      scaffold.showSnackBar(
-        SnackBar(content: Text(errorMsg)),
-      );
+  EventBus.instance.emitError(errorMsg);
     }
   }
 
