@@ -29,11 +29,29 @@ const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter(req, file, cb) {
-        const allowed = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
-        if (!allowed.includes(file.mimetype)) {
-            return cb(new Error("Only image files are allowed"));
+        // Accept common image mimetypes and any mimetype that starts with image/
+        const allowedExt = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
+
+        // If mimetype exists and clearly indicates image/* accept it
+        if (file.mimetype && typeof file.mimetype === 'string' && file.mimetype.startsWith('image/')) {
+            return cb(null, true);
         }
-        cb(null, true);
+
+        // Some clients (gallery/older devices/emulators) may omit or set an odd mimetype.
+        // Fall back to checking the filename extension when available.
+        const orig = file.originalname || '';
+        const ext = path.extname(orig).toLowerCase();
+        if (ext && allowedExt.includes(ext)) {
+            return cb(null, true);
+        }
+
+        // As a last resort accept common image-like stream when filename has no ext but fieldname suggests file
+        // (avoid blindly accepting all uploads). Log details to help debugging client uploads.
+        console.warn('upload.middleware: rejected file', { mimetype: file.mimetype, originalname: file.originalname, fieldname: file.fieldname });
+
+        const err = new Error('Only image files are allowed (jpg, png, webp, heic)');
+        err.status = 400;
+        return cb(err);
     },
 });
 

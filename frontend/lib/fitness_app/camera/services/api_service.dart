@@ -4,7 +4,8 @@ import 'package:best_flutter_ui_templates/services/auth_storage.dart';
 
 class ApiService {
   // Backend upload endpoint that accepts multipart form 'file' and returns prediction JSON.
-  static const String baseUrl = 'http://127.0.0.1:5001/api/v1';
+  // Backend mounts upload router at /upload (see backend/src/index.js)
+  static const String baseUrl = 'http://127.0.0.1:5001';
 
   static Future<Map<String, dynamic>?> predict(String imagePath) async {
     try {

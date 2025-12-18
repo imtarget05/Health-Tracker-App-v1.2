@@ -1,0 +1,115 @@
+[dotenv@17.2.3] injecting env (26) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+DEBUG: FIREBASE_PRIVATE_KEY type= string
+DEBUG: FIREBASE_PRIVATE_KEY length= 1732
+DEBUG: FIREBASE_PRIVATE_KEY contains literal \n= true
+DEBUG: FIREBASE_PRIVATE_KEY preview start= -----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAAS
+DEBUG: FIREBASE_PRIVATE_KEY preview end= nf/KK\nXuPW5BckKMAHIBkaLOzQspnS\n-----END PRIVATE KEY-----\n
+ Firebase Admin initialized successfully
+✅ Firebase Admin initialized
+✅ Notification schedulers started
+Notification schedulers started
+🚀 Server is running on port: 5001
+🗄  Using Firebase Firestore for database
+🔓 CORS origins: [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://localhost:5001',
+  'http://127.0.0.1:5001'
+]
+[REQ] POST /auth/register
+[signup] payload: { fullName: 'Dev Tester', email: 'tes***@example.com' }
+[signup] creating auth user for email= tester+dev@example.com
+[signup] Firebase Auth createUser failed: {
+  adminCode: 'auth/email-already-exists',
+  message: 'The email address is already in use by another account.'
+}
+[RES] POST /register 400 - 884ms
+[REQ] POST /auth/register
+[signup] payload: { fullName: 'Dev Tester', email: 'tes***@example.com' }
+[signup] creating auth user for email= tester+dev@example.com
+[signup] Firebase Auth createUser failed: {
+  adminCode: 'auth/email-already-exists',
+  message: 'The email address is already in use by another account.'
+}
+[RES] POST /register 400 - 440ms
+[REQ] POST /auth/login-email
+[RES] POST /login-email 200 - 1379ms
+[REQ] POST /upload
+Failed to upload to Firebase Storage, falling back to local-only mode: {
+  "error": {
+    "code": 404,
+    "message": "The specified bucket does not exist.",
+    "errors": [
+      {
+        "message": "The specified bucket does not exist.",
+        "domain": "global",
+        "reason": "notFound"
+      }
+    ]
+  }
+}
+
+[Notification] No active tokens for user aX0pQOZ7vuV00sAHafwf6CBujvU2
+[RES] POST / 200 - 1638ms
+[REQ] POST /upload
+Failed to upload to Firebase Storage, falling back to local-only mode: {
+  "error": {
+    "code": 404,
+    "message": "The specified bucket does not exist.",
+    "errors": [
+      {
+        "message": "The specified bucket does not exist.",
+        "domain": "global",
+        "reason": "notFound"
+      }
+    ]
+  }
+}
+
+[Notification] No active tokens for user aX0pQOZ7vuV00sAHafwf6CBujvU2
+[RES] POST / 200 - 1591ms
+[REQ] GET /upload
+[RES] GET /upload 404 - 2ms
+[REQ] POST /upload
+Failed to upload to Firebase Storage, falling back to local-only mode: {
+  "error": {
+    "code": 404,
+    "message": "The specified bucket does not exist.",
+    "errors": [
+      {
+        "message": "The specified bucket does not exist.",
+        "domain": "global",
+        "reason": "notFound"
+      }
+    ]
+  }
+}
+
+[Notification] No active tokens for user aX0pQOZ7vuV00sAHafwf6CBujvU2
+[RES] POST / 200 - 1299ms
+[REQ] POST /auth/google
+googleAuth: received idToken length= 1252
+googleAuth: allowedAudiences= [
+  '484752358530-rcv2nggm1ari9rhmojl2v27i1fv0eguh.apps.googleusercontent.com',
+  '484752358530-8i9arnlq3a77ti0s9snc6jihigrnf7me.apps.googleusercontent.com'
+]
+googleAuth: verifyIdToken payload= {
+  iss: 'https://accounts.google.com',
+  azp: '484752358530-rcv2nggm1ari9rhmojl2v27i1fv0eguh.apps.googleusercontent.com',
+  aud: '484752358530-rcv2nggm1ari9rhmojl2v27i1fv0eguh.apps.googleusercontent.com',
+  sub: '106786115122584635898',
+  email: 'binhtan5734@gmail.com',
+  email_verified: true,
+  at_hash: 'GiXCb6EMHSJp_cELmICP-w',
+  nonce: 'BOEEJ0846ZI01-fOxYCpLN6QUo6bcDj-T-DsAnURfHE',
+  name: 'Mai Nguyễn Bình Tân',
+  picture: 'https://lh3.googleusercontent.com/a/ACg8ocIUigZHGwTIn2-NbWRaSo5BKHRymAfyoS4P2kza6VlxsrHd8yw=s96-c',
+  given_name: 'Mai Nguyễn Bình',
+  family_name: 'Tân',
+  iat: 1766067947,
+  exp: 1766071547
+}
+[RES] POST /google 200 - 649ms

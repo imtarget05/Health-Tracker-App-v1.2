@@ -16,6 +16,7 @@ class ProfileSyncService {
   Box<dynamic>? _box;
   bool _initialized = false;
   bool _flushing = false;
+  StreamSubscription<User?>? _authSub;
   // Notify UI about queue length
   final queueCount = ValueNotifier<int>(0);
 
@@ -34,7 +35,18 @@ class ProfileSyncService {
   _updateQueueCount();
     debugPrint('ProfileSync: initialized, queue=${_box?.length ?? 0}');
     // try to flush any pending items
-    unawaited(_flushQueue());
+    // If user already signed in, flush now
+    if (FirebaseAuth.instance.currentUser != null) {
+      unawaited(_flushQueue());
+    }
+
+    // Listen for auth state changes: when a user signs in, try flushing queued items
+    _authSub ??= FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        debugPrint('ProfileSync: user signed in, attempting flush');
+        unawaited(_flushQueue());
+      }
+    });
   }
 
   Future<void> saveProfilePartial(Map<String, dynamic> data) async {
@@ -71,12 +83,20 @@ class ProfileSyncService {
       debugPrint('ProfileSync: box is null when enqueuing; initializing and retrying');
       await init();
     }
-    await _box!.add(jsonEncode(item));
-    _updateQueueCount();
-    debugPrint('ProfileSync: enqueued item, queue=${_box?.length ?? 0}');
-    // attempt flush in background unless immediate save failed due to permission issues
-    if (!immediateFailedDueToPermissionDenied) {
+  await _box!.add(jsonEncode(item));
+  _updateQueueCount();
+  debugPrint('ProfileSync: enqueued item, queue=${_box?.length ?? 0}');
+    // attempt flush in background only if a user is currently signed in and
+    // the immediate failure wasn't due to permission-denied. If no user is
+    // signed in we'll keep the item enqueued and flush when user signs in.
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (!immediateFailedDueToPermissionDenied && currentUser != null) {
+      // Kick off a background flush but avoid verbose per-item logging here.
       unawaited(_flushQueue());
+    } else if (currentUser == null) {
+      // Keep message concise to avoid spam when many items are enqueued while
+      // the user is signed out.
+      debugPrint('ProfileSync: enqueued item, will flush after sign-in (queue=${_box?.length ?? 0})');
     } else {
       debugPrint('ProfileSync: skipping immediate flush due to permission-denied');
     }
@@ -104,8 +124,9 @@ class ProfileSyncService {
   Future<void> retryQueue() async => _flushQueue();
 
   Future<void> _flushQueue() async {
-    if (_flushing) return;
-    _flushing = true;
+  if (_flushing) return;
+  _flushing = true;
+  debugPrint('ProfileSync: starting flush (queue=${_box?.length ?? 0})');
     try {
       if (!_initialized) await init();
       final box = _box!;
@@ -117,8 +138,9 @@ class ProfileSyncService {
 
         final user = FirebaseAuth.instance.currentUser;
         if (user == null) {
-          // cannot write until user signs in
-          debugPrint('ProfileSync: cannot flush because no user signed in; stopping');
+          // cannot write until user signs in — stop quietly and wait for auth
+          // state change to trigger a future flush.
+          debugPrint('ProfileSync: aborting flush; no user signed in');
           break;
         }
 
@@ -130,7 +152,7 @@ class ProfileSyncService {
           // remove item on success
           await box.deleteAt(0);
           _updateQueueCount();
-          debugPrint('ProfileSync: flushed item successfully, queue=${box.length}');
+          debugPrint('ProfileSync: flushed one item, remaining=${box.length}');
           attempt = 0; // reset backoff
         } catch (e) {
           debugPrint('ProfileSync: flush attempt failed: $e');
@@ -147,6 +169,7 @@ class ProfileSyncService {
           // retry loop
         }
       }
+      debugPrint('ProfileSync: flush complete (queue=${box.length})');
     } finally {
       _flushing = false;
     }

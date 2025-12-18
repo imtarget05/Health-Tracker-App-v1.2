@@ -25,6 +25,10 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# Read API key from env (optional): if set, require clients to include x-api-key header
+import os
+AI_API_KEY = os.environ.get('AI_API_KEY')
+
 # =========================
 # Khởi tạo model
 # =========================
@@ -72,6 +76,12 @@ def run_analysis(image_bytes: bytes) -> Dict[str, Any]:
             detail=f"Lỗi khi chạy mô hình: {e}",
         )
 
+def require_ai_key(request: Request):
+    if AI_API_KEY:
+        header = request.headers.get('x-api-key')
+        if not header or header != AI_API_KEY:
+            raise HTTPException(status_code=401, detail='Invalid API key')
+
 # =========================
 # Endpoint cơ bản
 # =========================
@@ -118,6 +128,7 @@ async def analyze_image(
 # =========================
 @app.get("/analyze-from-url")
 async def analyze_from_url(
+    request: Request,
     image_url: str = Query(..., description="URL của ảnh cần phân tích"),
 ):
     """
@@ -127,10 +138,14 @@ async def analyze_from_url(
     if predictor is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
 
+    # API key protection
+    require_ai_key(request)
+
     # Tải ảnh bằng httpx
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(image_url)
+        # follow redirects and set a pragmatic User-Agent so some storage providers allow the request
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            resp = await client.get(image_url, headers={"User-Agent": "HealthTracker/1.0 (+https://example.com)"})
     except Exception as e:
         logger.exception("Không tải được ảnh từ URL")
         raise HTTPException(
@@ -138,11 +153,19 @@ async def analyze_from_url(
             detail=f"Không tải được ảnh từ URL: {e}",
         )
 
-    if resp.status_code != 200:
+    # Accept any 2xx response; otherwise return a helpful error
+    if not (200 <= resp.status_code < 300):
         raise HTTPException(
             status_code=400,
             detail=f"Không tải được ảnh, status_code={resp.status_code}",
         )
+
+    # Basic content-type check: prefer image/* but allow binary fallbacks
+    content_type = resp.headers.get("content-type", "")
+    if content_type and not content_type.startswith("image/"):
+        # some storage returns application/octet-stream for images; in that case allow it
+        if not content_type.startswith("application/octet-stream"):
+            logger.warning("Downloaded resource has non-image content-type: %s", content_type)
 
     image_bytes = resp.content
     result = run_analysis(image_bytes)
@@ -163,6 +186,9 @@ async def predict(request: Request):
     """
     if predictor is None:
         raise HTTPException(status_code=500, detail="Model not loaded")
+
+    # API key protection
+    require_ai_key(request)
 
     try:
         body = await request.body()

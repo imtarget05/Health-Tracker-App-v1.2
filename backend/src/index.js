@@ -154,3 +154,11 @@ const startServer = async () => {
 };
 
 startServer();
+
+// Error handler (must be after routes)
+app.use((err, req, res, next) => {
+    console.error('[ERROR HANDLER]', err && (err.stack || err.message || err));
+    const status = err && err.status ? err.status : 500;
+    const message = err && err.message ? err.message : 'Internal server error';
+    res.status(status).json({ message });
+});

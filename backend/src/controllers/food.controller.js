@@ -1,7 +1,9 @@
 import fs from "fs/promises";
+import fetch from 'node-fetch';
 import { firebasePromise, getDb } from "../lib/firebase.js";
 import { AI_SERVICE_URL } from "../config/env.js";
 import aiClient from "../services/aiClient.js";
+import { handleAiProcessingSuccess, handleAiProcessingFailure } from '../notifications/notification.logic.js';
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -34,7 +36,7 @@ export const scanFood = async (req, res) => {
 
     let aiData;
     try {
-      aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 12000, retries: 2 });
+      aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 12000, retries: 2, aiApiKey: process.env.AI_API_KEY });
     } catch (err) {
       console.error('AI service error:', err?.message || err, err?.raw ? `rawLen=${String(err.raw).slice(0, 200)}` : '');
       return res.status(502).json({ message: 'AI service error', detail: err?.message || 'unknown' });
@@ -134,5 +136,139 @@ export const scanFood = async (req, res) => {
         console.warn("Cannot remove temp file:", localPath, e.message);
       }
     }
+  }
+};
+
+// POST /foods/scan-url
+// Body: JSON { imageUrl: string, mealType?: string }
+export const scanFoodFromUrl = async (req, res) => {
+  try {
+    await firebasePromise;
+    const db = getDb();
+    const user = req.user || null;
+    const userId = user?.uid || user?.userId || null;
+    const { imageUrl, mealType } = req.body;
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return res.status(400).json({ message: 'imageUrl is required' });
+    }
+
+    // Try AI analyze-from-url endpoint first (fast when AI can fetch URL directly)
+    let aiData;
+    try {
+      const url = `${AI_SERVICE_URL}/analyze-from-url?image_url=${encodeURIComponent(imageUrl)}`;
+      aiData = await aiClient.getAnalyzeFromUrl(url, { timeout: 15000, retries: 2, aiApiKey: process.env.AI_API_KEY });
+    } catch (err) {
+      console.warn('analyze-from-url failed, attempting server-side fetch+predict fallback:', err?.message || err);
+
+      // Fallback: try to download image server-side and POST raw bytes to AI /predict
+      try {
+        const fetchResp = await fetch(imageUrl);
+        if (!fetchResp.ok) {
+          const msg = `Failed to download image (${fetchResp.status})`;
+          console.error(msg);
+          if (userId) { try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); } }
+          return res.status(502).json({ message: 'AI service error', detail: msg });
+        }
+
+        const arrayBuffer = await fetchResp.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        try {
+          aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, buffer, { timeout: 20000, retries: 2 });
+        } catch (err2) {
+          console.error('AI service error (predict fallback):', err2?.message || err2, err2?.raw ? `rawLen=${String(err2.raw).slice(0, 200)}` : '');
+          if (userId) { try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); } }
+          return res.status(502).json({ message: 'AI service error', detail: err2?.message || 'unknown' });
+        }
+      } catch (fetchErr) {
+        console.error('Failed to fetch image server-side:', fetchErr?.message || fetchErr);
+        if (userId) { try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); } }
+        return res.status(502).json({ message: 'AI service error', detail: fetchErr?.message || 'failed to fetch image' });
+      }
+    }
+
+    if (!aiData || typeof aiData !== 'object' || !Array.isArray(aiData.detections)) {
+      console.error('AI returned unexpected shape', aiData);
+      if (userId) { try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); } }
+      return res.status(502).json({ message: 'AI service returned invalid response' });
+    }
+
+    if (!aiData.success || aiData.detections.length === 0) {
+      if (userId) { try { await handleAiProcessingFailure({ userId }); } catch (e) { console.warn('notify failure', e?.message || e); } }
+      return res.status(400).json({ message: 'No food detected in image' });
+    }
+
+    const detections = aiData.detections || [];
+    const totalNutrition = aiData.total_nutrition || null;
+    const itemsCount = aiData.items_count ?? detections.length;
+    const imageDimensions = aiData.image_dimensions || null;
+
+    // choose main detection (highest calories)
+    let mainDetection = null;
+    if (detections.length > 0) {
+      mainDetection = detections.reduce((max, cur) => {
+        const curCal = cur?.nutrition?.calories ?? 0;
+        const maxCal = max?.nutrition?.calories ?? 0;
+        return curCal > maxCal ? cur : max;
+      });
+    }
+
+    const now = new Date().toISOString();
+
+    const logData = {
+      userId,
+      // We do not persist the remote image URL into cloud storage here. The frontend is expected
+      // to download and save the image locally and associate it with the returned document id.
+      imagePath: null,
+      imageUrl: null,
+      detections,
+      totalNutrition,
+      itemsCount,
+      imageDimensions,
+      mainFood: mainDetection
+        ? {
+          food: mainDetection.food,
+          portion_g: mainDetection.portion_g,
+          nutrition: mainDetection.nutrition,
+          confidence: mainDetection.confidence,
+        }
+        : null,
+      createdAt: now,
+    };
+
+    const docRef = await db.collection('foodDetections').add(logData);
+
+    // notify success
+    if (userId && mainDetection) {
+      const deepLinkUrl = `healthytracker://detection/${docRef.id}`;
+      try {
+        await handleAiProcessingSuccess({
+          userId,
+          mealType: mealType || 'bữa ăn',
+          foodName: mainDetection.food,
+          calories: mainDetection.nutrition?.calories ?? 0,
+          deepLinkUrl,
+        });
+      } catch (e) { console.warn('notify failure', e?.message || e); }
+    }
+
+    // Suggest a filename the frontend can use to persist the image locally.
+    const extMatch = (imageUrl || '').match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+    const ext = extMatch ? `.${extMatch[1]}` : '.jpg';
+    const suggestedLocalFilename = `${docRef.id}${ext}`;
+
+    return res.status(200).json({
+      id: docRef.id,
+      suggestedLocalFilename,
+      itemsCount,
+      detections,
+      totalNutrition,
+      mainFood: logData.mainFood,
+      createdAt: now,
+    });
+  } catch (error) {
+    console.error('Error in scanFoodFromUrl:', error);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 };

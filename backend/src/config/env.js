@@ -10,6 +10,7 @@ const REQUIRED_ENV_VARS = [
     "JWT_SECRET",
     "AI_SERVICE_URL",
     "AI_CHAT_API_KEY",
+    // AI_API_KEY is optional: if set, backend will forward x-api-key to the AI service.
 ];
 
 const missing = REQUIRED_ENV_VARS.filter(
@@ -29,3 +30,4 @@ export const JWT_SECRET = process.env.JWT_SECRET;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 export const AI_CHAT_API_KEY = process.env.AI_CHAT_API_KEY;
+export const AI_API_KEY = process.env.AI_API_KEY || "";
