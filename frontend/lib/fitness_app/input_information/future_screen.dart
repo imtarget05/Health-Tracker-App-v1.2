@@ -1,3 +1,6 @@
+// Suppress private-type-in-public-api info for this UI file.
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:flutter/material.dart';
 
 import '../fitness_app_theme.dart';
@@ -156,13 +159,13 @@ class _FutureScreenState extends State<FutureScreen>
                     onPressed: () {
                       Navigator.pop(context);
                     },
-                    child: Text("Back", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Back", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                   ElevatedButton(
                     onPressed: () {
@@ -173,18 +176,18 @@ class _FutureScreenState extends State<FutureScreen>
                         }
                       };
                       ProfileSyncService.instance.saveProfilePartial(data);
-                      Navigator.push(
+                      Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (_) => HabitScreen()),
                       );
                     },
-                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                 ],
               ),

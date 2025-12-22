@@ -6,6 +6,16 @@ import 'package:best_flutter_ui_templates/fitness_app/fitness_app_theme.dart';
 import 'package:best_flutter_ui_templates/fitness_app/my_diary/meals_list_view.dart';
 import 'package:best_flutter_ui_templates/fitness_app/my_diary/water_view.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore_for_file: unused_field
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'package:path/path.dart' as p;
+import '../../models/diary.dart';
+import '../../services/diary_service.dart';
+import '../camera/services/db_service.dart';
 
 class MyDiaryScreen extends StatefulWidget {
   const MyDiaryScreen({super.key, this.animationController});
@@ -24,6 +34,17 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   double topBarOpacity = 0.0;
 
   DateTime selectedDate = DateTime.now();
+  Diary? currentDiary;
+  DiaryService? diaryService;
+  StreamSubscription<Diary?>? _diarySub;
+  // auth subscription handled inline; remove unused field to silence analyzer
+  StreamSubscription<User?>? _authSub;
+  Map<String, dynamic>? currentProfile;
+  // Notifier to propagate in-place profile updates to child widgets
+  ValueNotifier<Map<String, dynamic>>? profileNotifier;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _profileSub;
+  Map<String, Map<String, int>>? localSlotTotals;
+  VoidCallback? _dbNotifierListener;
 
 
   @override
@@ -33,6 +54,66 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             parent: widget.animationController!,
             curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
     addAllListData();
+    // compute local slot totals initially
+    _computeLocalSlotTotals();
+    // listen for DBService changes to recompute
+    try {
+      _dbNotifierListener = () async {
+        await _computeLocalSlotTotals();
+        if (mounted) {
+          setState(() {
+            listViews.clear();
+            addAllListData();
+          });
+        }
+      };
+      DBService.notifier.addListener(_dbNotifierListener!);
+    } catch (_) {}
+    // subscribe to auth changes and diary stream for selectedDate
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _diarySub?.cancel();
+      _profileSub?.cancel();
+      if (user != null) {
+        diaryService = DiaryService(FirebaseFirestore.instance, user.uid);
+        // subscribe to profile document for fallback values
+        try {
+          final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+          _profileSub = docRef.snapshots().listen((snap) {
+            if (!mounted) return;
+            setState(() {
+              currentProfile = snap.data();
+              // initialize or update notifier
+              if (profileNotifier == null) profileNotifier = ValueNotifier<Map<String, dynamic>>(currentProfile ?? <String, dynamic>{});
+              else profileNotifier!.value = currentProfile ?? <String, dynamic>{};
+              // also rebuild listViews so children get the new profile
+              listViews.clear();
+              addAllListData();
+            });
+          }, onError: (e) {
+            debugPrint('MyDiaryScreen: profile stream error: $e');
+          });
+        } catch (e) {
+          debugPrint('MyDiaryScreen: subscribe profile failed: $e');
+        }
+        _diarySub = diaryService!.streamDiary(selectedDate).listen((d) {
+          setState(() {
+            currentDiary = d;
+            // rebuild listViews to pass diary to children
+            listViews.clear();
+            addAllListData();
+          });
+        }, onError: (e) {
+          debugPrint('MyDiaryScreen: diary stream error: $e');
+        });
+      } else {
+        setState(() {
+          currentDiary = null;
+          currentProfile = null;
+          listViews.clear();
+          addAllListData();
+        });
+      }
+    });
 
     scrollController.addListener(() {
       if (scrollController.offset >= 24) {
@@ -59,6 +140,108 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     super.initState();
   }
 
+  @override
+  void dispose() {
+    _diarySub?.cancel();
+    _profileSub?.cancel();
+    _authSub?.cancel();
+    if (_dbNotifierListener != null) {
+      DBService.notifier.removeListener(_dbNotifierListener!);
+    }
+    profileNotifier?.dispose();
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _computeLocalSlotTotals() async {
+    final Map<String, Map<String, int>> totals = {
+      'breakfast': {'calories': 0, 'carbs': 0, 'protein': 0, 'fat': 0},
+      'lunch': {'calories': 0, 'carbs': 0, 'protein': 0, 'fat': 0},
+      'snack': {'calories': 0, 'carbs': 0, 'protein': 0, 'fat': 0},
+      'dinner': {'calories': 0, 'carbs': 0, 'protein': 0, 'fat': 0},
+    };
+    try {
+      final items = DBService.getAllResults();
+      // Define day window that starts at 21:00 of the previous calendar day
+      // and ends at 21:00 of the selectedDate. Scans whose timestamps fall
+      // within [dayStart, dayEnd) are counted for the selectedDate.
+      final DateTime dayEnd = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 21);
+      final DateTime dayStart = dayEnd.subtract(const Duration(hours: 24));
+
+      for (final it in items) {
+        try {
+          // Use ScanResult.timestamp to filter by our day window
+          final ts = it.timestamp;
+          if (ts.isBefore(dayStart) || !ts.isBefore(dayEnd)) continue;
+
+          // try to read sidecar JSON path permutations
+          final side = await _readSidecarForPath(it.imagePath);
+          if (side == null) continue;
+          final slot = side['slot'] as String?;
+          if (slot == null || !totals.containsKey(slot)) continue;
+          final total = side['totalNutrition'] as Map<String, dynamic>?;
+          if (total == null) continue;
+          final c = (total['calories'] is num) ? (total['calories'] as num).toInt() : 0;
+          final carbs = (total['carbs'] is num) ? (total['carbs'] as num).toInt() : 0;
+          final protein = (total['protein'] is num) ? (total['protein'] as num).toInt() : 0;
+          final fat = (total['fat'] is num) ? (total['fat'] as num).toInt() : 0;
+          totals[slot]!['calories'] = totals[slot]!['calories']! + c;
+          totals[slot]!['carbs'] = totals[slot]!['carbs']! + carbs;
+          totals[slot]!['protein'] = totals[slot]!['protein']! + protein;
+          totals[slot]!['fat'] = totals[slot]!['fat']! + fat;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    // update state so UI reflects the new aggregated totals
+    localSlotTotals = totals;
+    if (mounted) setState(() {});
+    // Also mirror total calories into the user's profile document so profile UI can show it
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        int totalCalories = 0;
+        for (final s in totals.keys) {
+          totalCalories += totals[s]?['calories'] ?? 0;
+        }
+        final profileDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
+        profileDoc.set({'profile': {'calories': totalCalories}, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+      }
+    } catch (e) {
+      debugPrint('Failed to mirror calories to profile: $e');
+    }
+  }
+
+  // helper to locate sidecar JSON on disk for a given image path
+  Future<Map<String, dynamic>?> _readSidecarForPath(String imagePath) async {
+    try {
+      final f = File(imagePath);
+      if (!await f.exists()) return null;
+      final dir = f.parent;
+      final base = p.basenameWithoutExtension(f.path);
+      final candidates = [
+        p.join(dir.path, '$base.json'),
+        p.join(dir.path, '$base.jpg.json'),
+        p.join(dir.path, '$base.jpeg.json'),
+        p.join(dir.path, '$base.png.json'),
+      ];
+      for (final c in candidates) {
+        final fc = File(c);
+        if (await fc.exists()) {
+          final txt = await fc.readAsString();
+          return jsonDecode(txt) as Map<String, dynamic>;
+        }
+      }
+      final files = dir.listSync().whereType<File>().where((f) => f.path.endsWith('.json'));
+      for (final fc in files) {
+        if (p.basenameWithoutExtension(fc.path) == base) {
+          final txt = await fc.readAsString();
+          return jsonDecode(txt) as Map<String, dynamic>;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   void addAllListData() {
     const int count = 9;
 
@@ -80,6 +263,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             curve:
                 Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
         animationController: widget.animationController!,
+  diary: currentDiary,
+  profile: currentProfile,
+  profileNotifier: profileNotifier,
+  localSlotTotals: localSlotTotals,
       ),
     );
     listViews.add(
@@ -96,12 +283,16 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
 
     listViews.add(
       MealsListView(
-        mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
-            CurvedAnimation(
-                parent: widget.animationController!,
-                curve: Interval((1 / count) * 3, 1.0,
-                    curve: Curves.fastOutSlowIn))),
+        diary: currentDiary,
+        profile: currentProfile,
+        localSlotTotals: localSlotTotals,
         mainScreenAnimationController: widget.animationController,
+        mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
+          CurvedAnimation(
+            parent: widget.animationController!,
+            curve: Interval((1 / count) * 3, 1.0, curve: Curves.fastOutSlowIn),
+          ),
+        ),
       ),
     );
 
@@ -123,7 +314,14 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             parent: widget.animationController!,
             curve:
                 Interval((1 / count) * 5, 1.0, curve: Curves.fastOutSlowIn))),
-        animationController: widget.animationController!,
+    animationController: widget.animationController!,
+  diary: currentDiary,
+  profile: currentProfile,
+  // pass notifier so the BodyMeasurementView can recompute estimates when profile updates
+  // (e.g., birthdate/age/sex updated in profile)
+  // If profileNotifier is null, the view still uses profile fallback.
+  // Use profileNotifier?.value to stay in sync.
+  // Note: BodyMeasurementView doesn't yet accept profileNotifier; it will pick profile via pv() and diary.
       ),
     );
     listViews.add(
@@ -145,7 +343,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                 parent: widget.animationController!,
                 curve: Interval((1 / count) * 7, 1.0,
                     curve: Curves.fastOutSlowIn))),
-        mainScreenAnimationController: widget.animationController!,
+    mainScreenAnimationController: widget.animationController!,
+    diary: currentDiary,
+    profile: currentProfile,
+    profileNotifier: profileNotifier,
       ),
     );
     listViews.add(

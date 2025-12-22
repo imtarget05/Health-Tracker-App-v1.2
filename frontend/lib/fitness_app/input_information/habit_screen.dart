@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore_for_file: deprecated_member_use
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 import '../../firebase_options.dart';
+import '../../services/profile_sync_service.dart';
+import '../../services/pending_signup.dart';
+import '../../services/auth_storage.dart';
+import '../../services/backend_api.dart';
 
 import '../fitness_app_theme.dart';
 import '../ui_view/input_view.dart';
@@ -30,6 +37,7 @@ class _HabitScreenState extends State<HabitScreen>
   final TextEditingController sleepController = TextEditingController();
   final TextEditingController exerciseController = TextEditingController();
   final TextEditingController waterController = TextEditingController();
+  bool _checkingProfile = true;
 
   @override
   void initState() {
@@ -37,6 +45,31 @@ class _HabitScreenState extends State<HabitScreen>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
+
+  // If user already has habit info in Firestore, skip this screen and go to home.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (Firebase.apps.isEmpty) {
+          await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        }
+      } catch (_) {}
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          final data = doc.data();
+          if (data != null && data['habit'] != null) {
+            // Already configured, navigate to home
+            if (mounted) {
+              Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()));
+        return;
+            }
+          }
+        } catch (_) {}
+      }
+    // finished checking; allow UI to render
+    if (mounted) setState(() => _checkingProfile = false);
+    });
 
     topBarAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -248,6 +281,16 @@ class _HabitScreenState extends State<HabitScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingProfile) {
+      return Container(
+        color: FitnessAppTheme.background,
+        child: const Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
     return Container(
       color: FitnessAppTheme.background,
       child: Scaffold(
@@ -269,18 +312,17 @@ class _HabitScreenState extends State<HabitScreen>
                     onPressed: () {
                       Navigator.pop(context);
                     },
-                    child: Text("Back", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Back", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                   ElevatedButton(
                     onPressed: () async {
                       // validate
-                      final scaffold = ScaffoldMessenger.of(context);
                       final navigator = Navigator.of(context);
 
                       final sleep = double.tryParse(sleepController.text);
@@ -288,15 +330,15 @@ class _HabitScreenState extends State<HabitScreen>
                       final exercise = exerciseController.text.trim();
 
                       if (sleep == null || sleep < 0 || sleep > 24) {
-                        scaffold.showSnackBar(const SnackBar(content: Text('Please choose a valid sleep hours (0-24).')));
+                        EventBus.instance.emitError('Please choose a valid sleep hours (0-24).');
                         return;
                       }
                       if (exercise.isEmpty) {
-                        scaffold.showSnackBar(const SnackBar(content: Text('Please select your favourite exercise.')));
+                        EventBus.instance.emitError('Please select your favourite exercise.');
                         return;
                       }
                       if (water == null || water <= 0) {
-                        scaffold.showSnackBar(const SnackBar(content: Text('Please enter amount of water in ml.')));
+                        EventBus.instance.emitError('Please enter amount of water in ml.');
                         return;
                       }
 
@@ -308,16 +350,6 @@ class _HabitScreenState extends State<HabitScreen>
                         }
 
                         final user = FirebaseAuth.instance.currentUser;
-                        if (user == null) {
-                          navigator.pop();
-                          scaffold.showSnackBar(const SnackBar(content: Text('Not signed in to Firebase.')));
-                          return;
-                        }
-
-                        final db = FirebaseFirestore.instance;
-                        final uid = user.uid;
-                        final doc = db.collection('users').doc(uid);
-
                         final payload = {
                           'habit': {
                             'sleepHours': sleep,
@@ -327,25 +359,232 @@ class _HabitScreenState extends State<HabitScreen>
                           }
                         };
 
-                        await doc.set(payload, SetOptions(merge: true));
+                        if (user == null) {
+                          // If there's a pending signup (user previously attempted
+                          // registration but createUser failed due to network), try to
+                          // finalize it now before enqueuing profile data. This helps
+                          // avoid the UX where the app showed success but no account
+                          // exists in Firebase.
+                          final pending = PendingSignup.peek();
+                          if (pending != null) {
+                            try {
+                              // Try to create or sign in the Firebase user now.
+                              try {
+                                await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                                  email: pending['email'] ?? '',
+                                  password: pending['password'] ?? '',
+                                );
+                              } on FirebaseAuthException catch (e) {
+                                if (e.code == 'email-already-in-use' || e.code == 'email-already-exists') {
+                                  await FirebaseAuth.instance.signInWithEmailAndPassword(
+                                    email: pending['email'] ?? '',
+                                    password: pending['password'] ?? '',
+                                  );
+                                } else {
+                                  // If still failing due to network or other transient
+                                  // conditions, leave pending signup for later and fall
+                                  // back to enqueuing the profile.
+                                  debugPrint('HabitScreen: finalize pending signup failed: $e');
+                                }
+                              }
+                            } catch (e) {
+                              debugPrint('HabitScreen: error while finalizing pending signup: $e');
+                            }
+
+                            // Re-check user after attempted finalization
+                            final after = FirebaseAuth.instance.currentUser;
+                            if (after != null) {
+                              // User is now signed in; continue to immediate save flow
+                              try {
+                                final db2 = FirebaseFirestore.instance;
+                                final doc2 = db2.collection('users').doc(after.uid);
+
+                                // infer name/username from email and merge habit into profile
+                                final currentEmailAfter = FirebaseAuth.instance.currentUser?.email ?? pending?['email'] ?? '';
+                                String inferredNameAfter = '';
+                                String inferredUsernameAfter = '';
+                                try {
+                                  if (currentEmailAfter.isNotEmpty) {
+                                    final parts = currentEmailAfter.split('@');
+                                    inferredUsernameAfter = parts.first;
+                                    inferredNameAfter = inferredUsernameAfter.replaceAll(RegExp(r'[\._\d]+'), ' ').trim();
+                                    if (inferredNameAfter.isEmpty) inferredNameAfter = inferredUsernameAfter;
+                                  }
+                                } catch (_) {}
+
+                                // Merge any queued partial profile data (from Welcome/Future screens)
+                                final queued = ProfileSyncService.instance.readQueue();
+                                final Map<String, dynamic> mergedProfileAfter = {
+                                  'fullName': inferredNameAfter,
+                                  'username': inferredUsernameAfter,
+                                };
+                                for (final item in queued) {
+                                  try {
+                                    final data = Map<String, dynamic>.from(item['data'] ?? {});
+                                    if (data.containsKey('profile') && data['profile'] is Map) {
+                                      mergedProfileAfter.addAll(Map<String, dynamic>.from(data['profile']));
+                                    }
+                                  } catch (_) {}
+                                }
+
+                                final docUpdate = {
+                                  'habit': payload['habit'],
+                                  'updatedAt': DateTime.now().toIso8601String(),
+                                  'profile': mergedProfileAfter,
+                                };
+
+                                await doc2.set(docUpdate, SetOptions(merge: true));
+                                // trigger queued flush
+                                try { await ProfileSyncService.instance.retryQueue(); } catch (_) {}
+                                navigator.pop();
+                                EventBus.instance.emitSuccess('Saved habit info');
+
+                                // consume pending signup now that backend account exists
+                                PendingSignup.consume();
+
+                                // Attempt deferred backend signup if registration was started earlier
+                                try {
+                                  final p = PendingSignup.consume();
+                                  if (p != null) {
+                                    final res = await BackendApi.signup(
+                                      fullName: p['fullName'] ?? '',
+                                      email: p['email'] ?? '',
+                                      password: p['password'] ?? '',
+                                      phone: p['phone'],
+                                    );
+                                    final backendToken = res != null && res['token'] != null ? res['token'] as String? : null;
+                                    final custom = res != null && res['firebaseCustomToken'] != null ? res['firebaseCustomToken'] as String? : null;
+                                    if (custom != null) {
+                                      try {
+                                        await FirebaseAuth.instance.signInWithCustomToken(custom);
+                                      } catch (e) {
+                                        debugPrint('HabitScreen: signInWithCustomToken failed: $e');
+                                      }
+                                    }
+                                    if (backendToken != null) {
+                                      AuthStorage.saveToken(backendToken);
+                                    }
+                                  }
+                                } catch (e, st) {
+                                  EventBus.instance.emitError('Unable to complete backend registration. Your profile will be saved locally.');
+                                  if (kDebugMode) debugPrint('HabitScreen: backend signup failed: $e\n$st');
+                                }
+
+                                navigator.pushReplacement(MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()));
+                                return;
+                              } catch (e, st) {
+                                debugPrint('HabitScreen: failed to save after finalizing signup: $e\n$st');
+                                // fall-through to enqueue below
+                              }
+                            }
+                          }
+
+                          // Not signed in: enqueue the profile partial for later sync
+                          try {
+                            await ProfileSyncService.instance.saveProfilePartial(payload);
+                            navigator.pop();
+                            EventBus.instance.emitInfo('Saved locally and will sync after sign-in.');
+                            // Proceed into the app even if not signed in so user can continue
+                            navigator.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+                          } catch (e) {
+                            navigator.pop();
+                            EventBus.instance.emitError('Not signed in to Firebase.');
+                          }
+                          return;
+                        }
+
+                        final db = FirebaseFirestore.instance;
+                        final uid = user.uid;
+                        final doc = db.collection('users').doc(uid);
+
+                        // Build profile updates: name from email (before @), username from email prefix
+                        final currentEmail = FirebaseAuth.instance.currentUser?.email ?? '';
+                        String inferredName = '';
+                        String inferredUsername = '';
+                        try {
+                          if (currentEmail.isNotEmpty) {
+                            final parts = currentEmail.split('@');
+                            inferredUsername = parts.first;
+                            // Create a nicer display name from the local part by replacing dots/underscores/numbers
+                            inferredName = inferredUsername.replaceAll(RegExp(r'[\._\d]+'), ' ').trim();
+                            if (inferredName.isEmpty) inferredName = inferredUsername;
+                          }
+                        } catch (_) {}
+
+                        // Merge any queued partial profile data (weight/height/ideal/deadline)
+                        final queued = ProfileSyncService.instance.readQueue();
+                        final Map<String, dynamic> mergedProfile = {
+                          'fullName': inferredName,
+                          'username': inferredUsername,
+                        };
+                        for (final item in queued) {
+                          try {
+                            final data = Map<String, dynamic>.from(item['data'] ?? {});
+                            if (data.containsKey('profile') && data['profile'] is Map) {
+                              mergedProfile.addAll(Map<String, dynamic>.from(data['profile']));
+                            }
+                          } catch (_) {}
+                        }
+
+                        final profileUpdate = {
+                          'habit': payload['habit'],
+                          'updatedAt': DateTime.now().toIso8601String(),
+                          'profile': mergedProfile,
+                        };
+
+                        // Merge the profile update into user doc
+                        await doc.set(profileUpdate, SetOptions(merge: true));
+
+                        // Trigger any queued sync now that user is signed in
+                        try { await ProfileSyncService.instance.retryQueue(); } catch (_) {}
 
                         navigator.pop();
-                        scaffold.showSnackBar(const SnackBar(content: Text('Saved habit info')));
-                        navigator.push(MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()));
+                        EventBus.instance.emitSuccess('Saved habit info');
+
+                        // Attempt deferred backend signup if registration was started earlier
+                        final pending = PendingSignup.consume();
+                        if (pending != null) {
+                          try {
+                            final res = await BackendApi.signup(
+                              fullName: pending['fullName'] ?? '',
+                              email: pending['email'] ?? '',
+                              password: pending['password'] ?? '',
+                              phone: pending['phone'],
+                            );
+
+                            final backendToken = res != null && res['token'] != null ? res['token'] as String? : null;
+                            final custom = res != null && res['firebaseCustomToken'] != null ? res['firebaseCustomToken'] as String? : null;
+                            if (custom != null) {
+                              try {
+                                await FirebaseAuth.instance.signInWithCustomToken(custom);
+                              } catch (e) {
+                                debugPrint('HabitScreen: signInWithCustomToken failed: $e');
+                              }
+                            }
+                            if (backendToken != null) {
+                              AuthStorage.saveToken(backendToken);
+                            }
+                          } catch (e, st) {
+                            // Report a friendly user-facing message and keep raw error in debug logs
+                                  EventBus.instance.emitError('Unable to complete backend registration. Your profile will be saved locally.');
+                            if (kDebugMode) debugPrint('HabitScreen: backend signup failed: $e\n$st');
+                          }
+                        }
+
+                        navigator.pushReplacement(MaterialPageRoute(builder: (_) => FitnessAppHomeScreen()));
                       } catch (e, st) {
                         navigator.pop();
-                        scaffold.showSnackBar(SnackBar(content: Text('Failed to save: $e')));
-                        // ignore: avoid_print
-                        print(st);
+                        EventBus.instance.emitError('Unable to save data. Please check your connection and try again.');
+                        if (kDebugMode) debugPrint('HabitScreen: failed to save: $e\n$st');
                       }
                     },
-                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                 ],
               ),

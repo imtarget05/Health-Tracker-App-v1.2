@@ -6,10 +6,15 @@ export const NotificationType = {
   CALORIE_UNDER: "calorie_under",
   AI_PROCESSING_SUCCESS: "ai_processing_success",
   AI_PROCESSING_FAILURE: "ai_processing_failure",
+  AI_CHAT_REPLY: "ai_chat_reply",
   DAILY_SUMMARY: "daily_summary",
   GOAL_ACHIEVED: "goal_achieved",
   STREAK_REMINDER: "streak_reminder",
   RE_ENGAGEMENT: "re_engagement",
+  WORKOUT_COMPLETE: "workout_complete",
+  AUTH_SIGNUP: "auth_signup",
+  AUTH_LOGIN: "auth_login",
+  AUTH_LOGOUT: "auth_logout",
 };
 
 export const NotificationTemplates = {
@@ -67,6 +72,12 @@ export const NotificationTemplates = {
     body: "Không thể nhận diện món ăn trong ảnh. Thử chụp lại hoặc nhập thủ công nhé.",
   },
 
+  // 8. AI Chat Reply
+  [NotificationType.AI_CHAT_REPLY]: {
+    title: "AI đã trả lời bạn 🤖",
+    body: "{{preview}}",
+  },
+
   // 8. Daily Summary
   [NotificationType.DAILY_SUMMARY]: {
     title: "Tổng kết hôm nay 🎯",
@@ -88,7 +99,8 @@ export const NotificationTemplates = {
     title: "Đừng để mất streak nhé 🔥",
     body:
       "Bạn đã giữ streak {{streak_days}} ngày rồi. " +
-      "Hôm nay vẫn chưa log gì, vào app 1 chút để giữ streak nhé!",
+      "Hôm nay vẫn chưa log gì. " +
+      "{{reminder_strength}} Hãy mở app và cập nhật để giữ động lực nhé!",
   },
 
   // 11. Re-engagement
@@ -97,5 +109,25 @@ export const NotificationTemplates = {
     body:
       "Đã {{inactive_days}} ngày bạn chưa mở app. " +
       "Quay lại cập nhật cân nặng và xem tiến độ nhé!",
+  },
+
+  // 12. Workout Complete
+  [NotificationType.WORKOUT_COMPLETE]: {
+    title: "✅ Hoàn thành buổi tập!",
+    body: "Đã hoàn thành {{duration}} phút {{type}} - đốt {{calories}} kcal. Quá tuyệt vời!",
+  },
+
+  // 13. Auth: Signup/Login/Logout
+  [NotificationType.AUTH_SIGNUP]: {
+    title: "🎉 Chào mừng bạn!",
+    body: "Tài khoản đã được tạo thành công. Hãy bắt đầu hành trình sức khoẻ của bạn.",
+  },
+  [NotificationType.AUTH_LOGIN]: {
+    title: "👋 Chào mừng bạn quay lại!",
+    body: "Chúc bạn một ngày khoẻ mạnh.",
+  },
+  [NotificationType.AUTH_LOGOUT]: {
+    title: "🔒 Bạn đã đăng xuất an toàn.",
+    body: "Cảm ơn bạn đã sử dụng ứng dụng. Bạn luôn có thể đăng nhập lại bất cứ lúc nào.",
   },
 };

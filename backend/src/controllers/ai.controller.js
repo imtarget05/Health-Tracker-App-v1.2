@@ -1,6 +1,8 @@
 // src/controllers/ai.controller.js
 import { gemini, GEMINI_CHAT_MODEL } from "../config/gemini.js";
 import { firebasePromise, getDb } from "../lib/firebase.js";
+import { sendPushToUser } from '../notifications/notification.service.js';
+import { NotificationType } from '../notifications/notification.templates.js';
 
 // Build system prompt dựa trên user + healthProfile
 const buildSystemPrompt = (user, healthProfile) => {
@@ -95,6 +97,51 @@ export const chatWithAiCoach = async (req, res) => {
 
     const replyText = response.text || "";
 
+    // Save chat turn to Firestore for history/audit
+    try {
+      await firebasePromise;
+      const db = getDb();
+      const userId = req.user?.uid || req.user?.userId || null;
+      const now = new Date();
+
+      const chatRecord = {
+        userId,
+        message,
+        reply: replyText,
+        model: GEMINI_CHAT_MODEL,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // If user available, store under profiles/{uid}/aiChats for per-user queries
+      if (userId) {
+        const profileRef = db.collection('profiles').doc(userId);
+        const chatsRef = profileRef.collection('aiChats');
+        await chatsRef.add(chatRecord);
+      }
+
+      // Also store a top-level copy for admin/debugging
+      await db.collection('aiChats').add(chatRecord);
+      // If user exists, send a lightweight notification about the reply (non-blocking)
+      if (userId) {
+        try {
+          const preview = (replyText || '').slice(0, 80);
+          await sendPushToUser({
+            userId,
+            type: NotificationType.AI_CHAT_REPLY,
+            variables: { preview },
+            data: { chatPreview: preview },
+            respectQuietHours: false,
+          });
+        } catch (e) {
+          console.warn('Failed to send AI chat notification', e && (e.message || e));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to persist AI chat record:', err);
+      // non-fatal: continue
+    }
+
     return res.status(200).json({
       reply: replyText,
       model: GEMINI_CHAT_MODEL,
@@ -102,5 +149,125 @@ export const chatWithAiCoach = async (req, res) => {
   } catch (error) {
     console.error("Error in chatWithAiCoach:", error);
     return res.status(500).json({ message: "AI chat error" });
+  }
+};
+
+export const getAiChatHistory = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !(user.uid || user.userId)) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const userId = user.uid || user.userId;
+    const limit = Math.min(100, parseInt(req.query.limit || '50', 10));
+
+    await firebasePromise;
+    const db = getDb();
+
+    // If client requested summaries, return per-profile aiChatSummaries
+    const returnSummaries = req.query.summary === '1' || req.query.summary === 'true';
+
+    if (returnSummaries) {
+      const profileRef = db.collection('profiles').doc(userId);
+      const summariesRef = profileRef.collection('aiChatSummaries');
+      const snap = await summariesRef.orderBy('updatedAt', 'desc').limit(limit).get();
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      return res.status(200).json({ history: docs });
+    }
+
+    // Default: return detailed aiChats (individual turns)
+    const profileRef = db.collection('profiles').doc(userId);
+    const chatsRef = profileRef.collection('aiChats');
+    const snap = await chatsRef.orderBy('createdAt', 'desc').limit(limit).get();
+
+    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    return res.status(200).json({ history: docs });
+  } catch (err) {
+    console.error('getAiChatHistory error', err);
+    return res.status(500).json({ message: 'Failed to load history' });
+  }
+};
+
+// Save or update a per-conversation summary (prompt + response) under
+// profiles/{userId}/aiChatSummaries with doc id equal to chatId. This is
+// intended for clients to persist a single summary row per conversation and
+// allow ordering by updatedAt so updated conversations move to the top.
+export const saveAiChatSummary = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !(user.uid || user.userId)) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { chatId, prompt, response: reply, imagesUrls } = req.body;
+    if (!chatId || typeof chatId !== 'string') {
+      return res.status(400).json({ message: 'Field "chatId" is required' });
+    }
+
+    const userId = user.uid || user.userId;
+    await firebasePromise;
+    const db = getDb();
+
+    const now = new Date();
+    const summaryDoc = {
+      chatId,
+      prompt: prompt || '',
+      response: reply || '',
+      imagesUrls: Array.isArray(imagesUrls) ? imagesUrls : [],
+      updatedAt: now,
+      userId,
+    };
+
+    const profileRef = db.collection('profiles').doc(userId);
+    const summariesRef = profileRef.collection('aiChatSummaries');
+
+    // Use chatId as the document id so subsequent saves overwrite and move
+    // the conversation to the top when ordered by updatedAt.
+    await summariesRef.doc(chatId).set(summaryDoc, { merge: true });
+
+    // Optionally store a top-level copy for admin/debugging
+    try {
+      await db.collection('aiChatSummaries').doc(chatId + '_' + userId).set(summaryDoc, { merge: true });
+    } catch (e) {
+      // non-fatal
+      console.error('Failed to write top-level summary copy:', e);
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('saveAiChatSummary error', err);
+    return res.status(500).json({ message: 'Failed to save summary' });
+  }
+};
+
+export const deleteAiChatSummary = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !(user.uid || user.userId)) return res.status(401).json({ message: 'Unauthorized' });
+
+    const userId = user.uid || user.userId;
+    const { chatId } = req.params;
+    if (!chatId) return res.status(400).json({ message: 'chatId required' });
+
+    await firebasePromise;
+    const db = getDb();
+
+    const profileRef = db.collection('profiles').doc(userId);
+    const summariesRef = profileRef.collection('aiChatSummaries');
+    await summariesRef.doc(chatId).delete().catch(() => { });
+
+    // delete top-level copy if present
+    try {
+      await db.collection('aiChatSummaries').doc(chatId + '_' + userId).delete().catch(() => { });
+    } catch (e) {
+      // ignore
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('deleteAiChatSummary error', err);
+    return res.status(500).json({ message: 'Failed to delete summary' });
   }
 };

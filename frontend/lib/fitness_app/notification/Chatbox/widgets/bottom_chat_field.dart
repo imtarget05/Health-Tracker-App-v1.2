@@ -2,6 +2,7 @@ import 'dart:developer';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/providers/chat_provider.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/utility/animated_dialog.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/widgets/preview_images_widget.dart';
@@ -42,16 +43,34 @@ class _BottomChatFieldState extends State<BottomChatField> {
     required bool isTextOnly,
   }) async {
     try {
+      // Ensure any composing text from IME is committed by removing focus
+      // then read the controller value after a short delay.
+      textFieldFocus.unfocus();
+      await Future.delayed(const Duration(milliseconds: 80));
+      final toSend = textController.text.isNotEmpty ? textController.text : message;
+
       await chatProvider.sentMessage(
-        message: message,
+        message: toSend,
         isTextOnly: isTextOnly,
       );
     } catch (e) {
       log('error : $e');
     } finally {
-      textController.clear();
+      // Clear input and update UI without clobbering IME composing state.
+      // Use clear() and set a collapsed selection instead of resetting the
+      // entire TextEditingValue which can interrupt some Vietnamese IMEs.
+      setState(() {
+        textController.clear();
+        textController.selection = const TextSelection.collapsed(offset: 0);
+      });
       widget.chatProvider.setImagesFileList(listValue: []);
+      // remove focus from text field
       textFieldFocus.unfocus();
+      // Hide the platform keyboard to ensure IME state is reset on some platforms
+      // (best-effort; ignore failures).
+      try {
+        SystemChannels.textInput.invokeMethod('TextInput.hide');
+      } catch (_) {}
     }
   }
 
@@ -91,11 +110,11 @@ class _BottomChatFieldState extends State<BottomChatField> {
                 onPressed: () {
                   if (hasImages) {
                     // show the delete dialog
-                    showMyAnimatedDialog(
-                        context: context,
-                        title: 'Delete Images',
-                        content: 'Are you sure you want to delete the images?',
-                        actionText: 'Delete',
+            showMyAnimatedDialog(
+              context: context,
+              title: 'Xoá hình',
+              content: 'Bạn có chắc muốn xoá các hình này?',
+              actionText: 'Xoá',
                         onActionPressed: (value) {
                           if (value) {
                             widget.chatProvider.setImagesFileList(
@@ -118,6 +137,10 @@ class _BottomChatFieldState extends State<BottomChatField> {
                 child: TextField(
                   focusNode: textFieldFocus,
                   controller: textController,
+                  onChanged: (v) {
+                    // ensure UI reflects current text during IME composition
+                    setState(() {});
+                  },
                   textInputAction: TextInputAction.send,
                   onSubmitted: widget.chatProvider.isLoading
                       ? null
@@ -131,8 +154,8 @@ class _BottomChatFieldState extends State<BottomChatField> {
                             );
                           }
                         },
-                  decoration: InputDecoration.collapsed(
-                      hintText: 'Enter a prompt...',
+          decoration: InputDecoration.collapsed(
+            hintText: 'Nhập nội dung...',
                       border: OutlineInputBorder(
                         borderSide: BorderSide.none,
                         borderRadius: BorderRadius.circular(30),

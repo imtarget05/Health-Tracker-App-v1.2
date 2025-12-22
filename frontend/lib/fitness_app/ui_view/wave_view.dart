@@ -1,7 +1,9 @@
+// Suppress private-type-in-public-api info for this UI file.
+// ignore_for_file: library_private_types_in_public_api
+
 import 'dart:math' as math;
 import 'package:best_flutter_ui_templates/fitness_app/fitness_app_theme.dart';
 import 'package:flutter/material.dart';
-import 'package:vector_math/vector_math.dart' as vector;
 
 class WaveView extends StatefulWidget {
   final double percentageValue;
@@ -25,14 +27,13 @@ class _WaveViewState extends State<WaveView> with TickerProviderStateMixin {
         duration: Duration(milliseconds: 2000), vsync: this);
     waveAnimationController = AnimationController(
         duration: Duration(milliseconds: 2000), vsync: this);
-    animationController!
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          animationController?.reverse();
-        } else if (status == AnimationStatus.dismissed) {
-          animationController?.forward();
-        }
-      });
+    animationController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        animationController?.reverse();
+      } else if (status == AnimationStatus.dismissed) {
+        animationController?.forward();
+      }
+    });
     waveAnimationController!.addListener(() {
       animList1.clear();
       for (int i = -2 - bottleOffset1.dx.toInt(); i <= 60 + 2; i++) {
@@ -41,7 +42,7 @@ class _WaveViewState extends State<WaveView> with TickerProviderStateMixin {
             i.toDouble() + bottleOffset1.dx.toInt(),
             math.sin((waveAnimationController!.value * 360 - i) %
                         360 *
-                        vector.degrees2Radians) *
+                        (math.pi / 180)) *
                     4 +
                 (((100 - widget.percentageValue) * 160 / 100)),
           ),
@@ -54,7 +55,7 @@ class _WaveViewState extends State<WaveView> with TickerProviderStateMixin {
             i.toDouble() + bottleOffset2.dx.toInt(),
             math.sin((waveAnimationController!.value * 360 - i) %
                         360 *
-                        vector.degrees2Radians) *
+                        (math.pi / 180)) *
                     4 +
                 (((100 - widget.percentageValue) * 160 / 100)),
           ),
@@ -162,91 +163,8 @@ class _WaveViewState extends State<WaveView> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            Positioned(
-              top: 0,
-              left: 6,
-              bottom: 8,
-              child: ScaleTransition(
-                alignment: Alignment.center,
-                scale: Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-                    parent: animationController!,
-                    curve: Interval(0.0, 1.0, curve: Curves.fastOutSlowIn))),
-                child: Container(
-                  width: 2,
-                  height: 2,
-                  decoration: BoxDecoration(
-                    color: FitnessAppTheme.white.withAlpha(102),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 24,
-              right: 0,
-              bottom: 16,
-              child: ScaleTransition(
-                alignment: Alignment.center,
-                scale: Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-                    parent: animationController!,
-                    curve: Interval(0.4, 1.0, curve: Curves.fastOutSlowIn))),
-                child: Container(
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: FitnessAppTheme.white.withAlpha(102),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 24,
-              bottom: 32,
-              child: ScaleTransition(
-                alignment: Alignment.center,
-                scale: Tween(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-                    parent: animationController!,
-                    curve: Interval(0.6, 0.8, curve: Curves.fastOutSlowIn))),
-                child: Container(
-                  width: 3,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: FitnessAppTheme.white.withAlpha(102),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 0,
-              right: 20,
-              bottom: 0,
-              child: Transform(
-                transform: Matrix4.translationValues(
-                    0.0, 16 * (1.0 - animationController!.value), 0.0),
-                child: Container(
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-          color: FitnessAppTheme.white.withAlpha(
-            animationController!.status == AnimationStatus.reverse
-              ? 0
-              : 102),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-            Column(
-              children: <Widget>[
-                AspectRatio(
-                  aspectRatio: 1,
-                  child: Image.asset("assets/fitness_app/bottle.png"),
-                ),
-              ],
-            )
+            // Removed decorative bottle image to avoid showing static dots overlay.
+            const SizedBox.shrink(),
           ],
         ),
       ),

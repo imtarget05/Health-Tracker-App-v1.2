@@ -75,7 +75,7 @@ class InputView extends StatelessWidget {
                       child: (options != null && options!.isNotEmpty)
                           ? Builder(builder: (context) {
                               final dropdown = DropdownButtonFormField<String>(
-                                value: controller.text.isNotEmpty && options!.contains(controller.text) ? controller.text : null,
+                                initialValue: controller.text.isNotEmpty && options!.contains(controller.text) ? controller.text : null,
                                 items: options!.map((o) => DropdownMenuItem<String>(value: o, child: Text(o))).toList(),
                                 onChanged: (v) {
                                   if (v != null) controller.text = v;

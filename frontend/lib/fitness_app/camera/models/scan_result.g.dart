@@ -16,10 +16,18 @@ class ScanResultAdapter extends TypeAdapter<ScanResult> {
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
+    double parseConfidence(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      if (v is String) return double.tryParse(v) ?? 0.0;
+      return 0.0;
+    }
+
     return ScanResult(
       imagePath: fields[0] as String,
       predictedClass: fields[1] as String,
-      confidence: fields[2] as double,
+      confidence: parseConfidence(fields[2]),
       timestamp: fields[3] as DateTime,
       synced: fields[4] as bool,
     );

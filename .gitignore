@@ -5,3 +5,32 @@ Health-Tracker-App/
 AI/.venv/
 AI/__pycache__/
 AI/*.pyc
+
+# Ignore dotenv files
+*.env
+.env
+
+# Ignore dataset folder (large data that should not be committed)
+Dataset/
+Dataset/**
+
+# Local secrets
+/backend/.env
+/backend/*.json
+/frontend/.env
+/AI/models/
+
+# Build / caches / editor / virtual envs
+/frontend/build/
+/frontend/.dart_tool/
+/frontend/.git-backup/
+/AI/.venv311/
+/AI/__pycache__/
+/backend/node_modules/
+/frontend/ios/Pods/
+/*.log
+
+# Explicit backend secrets
+/backend/.env
+/backend/*.serviceAccount.json
+/backend/*-firebase-adminsdk-*.json

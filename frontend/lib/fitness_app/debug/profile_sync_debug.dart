@@ -25,7 +25,7 @@ class _ProfileSyncDebugPageState extends State<ProfileSyncDebugPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Hàng đợi đồng bộ hồ sơ')),
+  appBar: AppBar(title: const Text('Profile Sync Queue')),
       body: Column(
         children: [
           Padding(

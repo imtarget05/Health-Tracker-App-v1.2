@@ -1,8 +1,9 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+/// Simple API service config helper used by the chat provider.
+/// This avoids hardcoding API keys in multiple places and keeps a single
+/// accessor for the (optional) client-side AI key read from `.env`.
 class ApiService {
-    static String apiKey = 'AIzaSyCmxXLq__RxQGO7OvPkRI8l1GaRLeZn29g';
-
-    // static String apiKey = 'YOUR_OWN_API_KEY';
-    //static String apiKey = dotenv.env['API_KEY'] ?? 'API_KEY not found';
-
+  /// Returns the client-side AI key (may be empty in production if you use backend).
+  static String get apiKey => dotenv.env['AI_CHAT_API_KEY'] ?? '';
 }

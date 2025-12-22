@@ -1,4 +1,7 @@
 import 'package:flutter/cupertino.dart';
+// Suppress private-type-in-public-api info for this UI file.
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:flutter/material.dart';
 
 class CountdownPage extends StatefulWidget {
@@ -17,10 +20,8 @@ class RoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 5,
-      ),
+    return SizedBox(
+      width: 5 + 36, // approximate spacing + child size
       child: CircleAvatar(
         radius: 30,
         child: Icon(
@@ -108,7 +109,7 @@ class _CountdownPageState extends State<CountdownPage>
                     if (controller.isDismissed) {
                       showModalBottomSheet(
                         context: context,
-                        builder: (context) => Container(
+                        builder: (context) => SizedBox(
                           height: 300,
                           child: CupertinoTimerPicker(
                             initialTimerDuration: controller.duration!,

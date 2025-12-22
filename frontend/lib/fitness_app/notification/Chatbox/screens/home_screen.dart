@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/providers/chat_provider.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/screens/chat_history_screen.dart';
 import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/screens/chat_screen.dart';
-import 'package:best_flutter_ui_templates/fitness_app/notification/Chatbox/screens/profile_screen.dart';
+// profile screen removed from chat tabs per UX change
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,11 +14,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // list of screens
+  // list of screens (Profile removed)
   final List<Widget> _screens = [
     const ChatHistoryScreen(),
     const ChatScreen(),
-    const ProfileScreen(),
   ];
 
   @override
@@ -44,16 +43,11 @@ class _HomeScreenState extends State<HomeScreen> {
             items: const [
               BottomNavigationBarItem(
                 icon: Icon(Icons.history),
-                // icon: Icon(CupertinoIcons.timelapse),
-                label: 'Chat History',
+                label: 'Lịch sử',
               ),
               BottomNavigationBarItem(
                 icon: Icon(CupertinoIcons.chat_bubble),
-                label: 'Chat',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(CupertinoIcons.person),
-                label: 'Profile',
+                label: 'Trò chuyện',
               ),
             ],
           ),

@@ -121,6 +121,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.all(30),
                     child: ElevatedButton(
                       onPressed: () {
+                        // Finish onboarding and go to select goal screen (start registration flow)
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (_) => const SelectGoalScreen()),
@@ -151,7 +152,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       children: [
                         TextButton(
                           onPressed: () {
-                            _controller.jumpToPage(2);
+                            // Skip straight to select goal screen to begin setup
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SelectGoalScreen()),
+                            );
                           },
                           style: TextButton.styleFrom(
                             elevation: 0,

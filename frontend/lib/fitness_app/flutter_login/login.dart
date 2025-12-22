@@ -1,17 +1,25 @@
+// Suppress low-risk analyzer messages about private state types exposed
+// via the public widget API. These widgets intentionally use private
+// State classes per Flutter conventions.
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import './register.dart';
 import './resetpassword.dart';
-
 import '../welcome/onboarding_screen.dart';
+import '../input_information/welcome_screen.dart';
+import '../fitness_app_home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../firebase_options.dart';
 import '../../services/backend_api.dart';
 import '../../services/auth_storage.dart';
 import '../../services/google_auth_service.dart';
 import '../../services/facebook_auth_service.dart';
-import '../profile/edit_profile.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/profile_sync_service.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class LoginPage extends StatefulWidget {
   final String? title;
@@ -31,12 +39,123 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _isLoading = false;
   bool _firebaseReady = false;
-  // _firebaseInitError removed because it was never used by the UI
+  // Firebase init error shown to user when initialization fails.
+  // The field is intentionally kept for future UX messaging; suppress unused-field for now.
+  // ignore: unused_field
+  String? _firebaseInitError;
 
   @override
   void initState() {
     super.initState();
     _ensureFirebaseInitialized();
+  }
+
+  // Helper: detect noisy platform/network plugin messages and emit a friendly
+  // user-facing message while keeping the raw text in debug logs for devs.
+  bool _isNetworkError(String? message) {
+    if (message == null) return false;
+    final m = message.toLowerCase();
+    return m.contains('network') || m.contains('timeout') || m.contains('interrupted') ||
+        m.contains('unreachable') || m.contains('socketexception') || m.contains('failed host lookup') ||
+        m.contains('host lookup') || m.contains('connection timed out');
+  }
+
+  void _emitFriendlyError(Object? raw, [String? fallback]) {
+    final rawStr = raw?.toString();
+    if (_isNetworkError(rawStr)) {
+      debugPrint('Login: raw error (network-like): $rawStr');
+  EventBus.instance.emitError('Temporary network error. Please check your connection and try again.');
+      return;
+    }
+  final msg = fallback ?? rawStr ?? 'An error occurred. Please try again.';
+    debugPrint('Login: error emitted (raw): $rawStr');
+    EventBus.instance.emitError(msg);
+  }
+
+  Future<void> _routeAfterLogin() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+  debugPrint('Login: _routeAfterLogin called, user=${user?.uid}');
+      if (user == null) {
+        if (!mounted) return;
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OnboardingScreen()));
+        return;
+      }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final data = doc.exists ? (doc.data() ?? <String, dynamic>{}) : <String, dynamic>{};
+  debugPrint('Login: fetched user doc, keys=${data.keys.toList()}');
+
+      // If a user document already exists with any data, treat the account as configured
+      if (doc.exists && data.isNotEmpty) {
+        debugPrint('Login: user doc exists and is non-empty - routing to home');
+        if (!mounted) return;
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+        return;
+      }
+
+      // reuse register.dart's heuristics to decide where to route
+      bool needsInputInformation(Map<String, dynamic> d) {
+        final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+        dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+        final age = getField('age');
+        final gender = getField('gender');
+        final weightKg = getField('weightKg');
+        final heightCm = getField('heightCm');
+        final idealWeightKg = getField('idealWeightKg');
+        final deadline = getField('deadline');
+        if (age == null) return true;
+        if (gender == null || gender.toString().trim().isEmpty) return true;
+        if (weightKg == null) return true;
+        if (heightCm == null) return true;
+        if (idealWeightKg == null) return true;
+        if (deadline == null || deadline.toString().trim().isEmpty) return true;
+        return false;
+      }
+
+      bool needsOnboarding(Map<String, dynamic> d) {
+        final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+        dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+        final training = getField('trainingIntensity');
+        final diet = getField('dietPlan');
+        final onboardingName = getField('fullName') ?? getField('displayName') ?? getField('name');
+        if (training == null || training.toString().trim().isEmpty) return true;
+        if (diet == null || diet.toString().trim().isEmpty) return true;
+        if (onboardingName == null || onboardingName.toString().trim().isEmpty) return true;
+        return false;
+      }
+
+      // If onboarding fields are missing, route user into onboarding_contents first
+      if (needsOnboarding(data)) {
+        debugPrint('Login: routing -> OnboardingScreen (needsOnboarding)');
+        if (!mounted) return;
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+        return;
+      }
+
+      // If habit data is present in the user doc, consider profile complete and go home
+      if (data['habit'] != null) {
+        debugPrint('Login: routing -> FitnessAppHomeScreen (habit present)');
+        if (!mounted) return;
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+        return;
+      }
+
+      // If input-information fields are missing, route to WelcomeScreen
+      if (needsInputInformation(data)) {
+        if (!mounted) return;
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WelcomeScreen()));
+        return;
+      }
+
+      // Otherwise the user has completed onboarding + input information — go to app home
+  if (!mounted) return;
+  debugPrint('Login: routing -> FitnessAppHomeScreen (default)');
+  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+    } catch (e) {
+      // fallback to onboarding on error
+      if (!mounted) return;
+  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+    }
   }
 
   Future<void> _ensureFirebaseInitialized() async {
@@ -46,12 +165,12 @@ class _LoginPageState extends State<LoginPage> {
       }
       setState(() {
         _firebaseReady = true;
+        _firebaseInitError = null;
       });
     } catch (e) {
       setState(() {
         _firebaseReady = false;
-  // intentionally not storing the error string on the state since
-  // it wasn't being displayed anywhere in the UI
+        _firebaseInitError = e.toString();
       });
     }
   }
@@ -136,11 +255,6 @@ class _LoginPageState extends State<LoginPage> {
       : () async {
         if (!_formKey.currentState!.validate()) return;
 
-        // capture navigator and messenger before any awaits to avoid using a
-        // BuildContext across async gaps
-        final scaffold = ScaffoldMessenger.of(context);
-        final nav = Navigator.of(context);
-
         setState(() => _isLoading = true);
 
         try {
@@ -149,10 +263,8 @@ class _LoginPageState extends State<LoginPage> {
             try {
               await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
             } catch (initErr) {
-              if (mounted) setState(() => _isLoading = false);
-              scaffold.showSnackBar(
-                SnackBar(content: Text('Firebase init failed: $initErr')),
-              );
+              setState(() => _isLoading = false);
+              _emitFriendlyError(initErr, 'Không thể khởi tạo Firebase. Vui lòng thử lại.');
               return;
             }
           }
@@ -161,6 +273,14 @@ class _LoginPageState extends State<LoginPage> {
             email: _emailCtrl.text.trim(),
             password: _passCtrl.text,
           );
+          debugPrint('Login: signInWithEmailAndPassword resolved - waiting for auth state');
+          try {
+            await FirebaseAuth.instance.authStateChanges().firstWhere((u) => u != null).timeout(const Duration(seconds: 6));
+            debugPrint('Login: authState confirmed user=${FirebaseAuth.instance.currentUser?.uid}');
+            try { await ProfileSyncService.instance.retryQueue(); } catch (_) {}
+          } catch (e) {
+            debugPrint('Login: authState wait after email sign-in timed out or failed: $e');
+          }
 
           // Get ID token
           String? idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
@@ -175,17 +295,13 @@ class _LoginPageState extends State<LoginPage> {
             AuthStorage.saveToken(backendToken);
           }
 
-          // Ensure profile completeness then navigate using captured navigator
-          await _ensureProfileCompletedAndNavigate(nav);
+          // Navigate to dashboard
+          await _routeAfterLogin();
         } catch (e) {
           final msg = e is Exception ? e.toString() : 'Login failed';
-          if (mounted) {
-            scaffold.showSnackBar(
-              SnackBar(content: Text(msg)),
-            );
-          }
+          _emitFriendlyError(e, 'Đăng nhập thất bại. Vui lòng thử lại.');
         } finally {
-          if (mounted) setState(() => _isLoading = false);
+          setState(() => _isLoading = false);
         }
       },
       child: _isLoading
@@ -229,25 +345,81 @@ class _LoginPageState extends State<LoginPage> {
                     onPressed: (!_firebaseReady || _isLoading)
                         ? null
                         : () async {
-                            // capture context-bound objects before async work
-                            final scaffold = ScaffoldMessenger.of(context);
-                            final nav = Navigator.of(context);
                             setState(() => _isLoading = true);
                             try {
                               final svc = GoogleAuthService();
-                              final backendBase = BackendApi.baseUrl;
+                              final backendBase = Uri.base.host == '' ? 'http://127.0.0.1:5001' : 'http://127.0.0.1:5001';
                               final result = await svc.signInToBackend(backendBase);
                               if (result != null) {
-                                final token = result['token'] as String?;
+                                // result now contains 'backend' and google tokens
+                                final backend = result['backend'] as Map<String, dynamic>?;
+                                final idToken = result['idToken'] as String?;
+                                final accessToken = result['accessToken'] as String?;
+
+                                // Sign-in the Firebase client SDK locally so ProfileSync can write
+                                try {
+                                  if (idToken != null) {
+                                    // use Firebase Auth to sign in by credential
+                                    // Note: ensure firebase_auth is imported in this file
+                                    // to make this work. If not available, we fallback.
+                                    try {
+                                      final credential = GoogleAuthProvider.credential(
+                                        idToken: idToken,
+                                        accessToken: accessToken,
+                                      );
+                                      await FirebaseAuth.instance.signInWithCredential(credential);
+                                      debugPrint('Login: signInWithCredential resolved (Google) - waiting for auth state');
+                                      try {
+                                        await FirebaseAuth.instance.authStateChanges().firstWhere((u) => u != null).timeout(const Duration(seconds: 6));
+                    debugPrint('Login: authState confirmed user=${FirebaseAuth.instance.currentUser?.uid} (Google)');
+                      EventBus.instance.emitInfo('Firebase client signed in (Google)');
+                      try { await ProfileSyncService.instance.retryQueue(); } catch (_) {}
+                                      } catch (e) {
+                                        debugPrint('Login: authState wait after Google credential sign-in timed out or failed: $e');
+                                      }
+                                    } catch (_) {
+                                      // ignore; fallback relies on backend token
+                                    }
+                                  }
+                                } catch (_) {}
+
+                                final token = backend != null ? backend['token'] as String? : null;
+                                final existingAccount = backend != null ? (backend['existingAccount'] == true) : false;
+                                // backend may set _firebaseSignedIn when it created a custom token or
+                                // when we performed credential sign-in earlier; we don't rely on
+                                // this variable for the immediate existingAccount routing.
                                 if (token != null) {
                                   AuthStorage.saveToken(token);
                                 }
-                                await _ensureProfileCompletedAndNavigate(nav);
+
+                                // If backend told us this is an existing account and the Firebase client is signed in,
+                                // route directly to the app home. Otherwise perform the normal route checks.
+                                // If backend told us this is an existing account and the Firebase client is signed in,
+                                // route directly to the app home. Also allow routing if the local FirebaseAuth.currentUser
+                                // is non-null even if the backend response didn't set _firebaseSignedIn (safety net).
+                                // If backend told us this is an existing account, route directly to the app home
+                                // immediately (user already has a configured profile). This makes the UX faster
+                                // and avoids blocking navigation on slight client-side auth timing races.
+                                if (existingAccount) {
+                                  debugPrint('Login: backend existingAccount -> routing to home immediately');
+                                  EventBus.instance.emitInfo('login success');
+                                  // Trigger profile sync in background and don't await to avoid
+                                  // holding the BuildContext across async gaps.
+                                  try { ProfileSyncService.instance.retryQueue(); } catch (_) {}
+                                  if (!mounted) return;
+                                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+                                  return;
+                                }
+
+                                // Trigger an immediate retry of the profile sync queue (best-effort)
+                                try { ProfileSyncService.instance.retryQueue(); } catch (_) {}
+                                await _routeAfterLogin();
                               }
-                            } catch (e) {
-                              scaffold.showSnackBar(SnackBar(content: Text('Google sign-in failed: $e')));
+                            } catch (e, st) {
+                              EventBus.instance.emitError('Đăng nhập bằng Google thất bại. Vui lòng thử lại.');
+                              if (kDebugMode) debugPrint('Login: Google sign-in failed: $e\n$st');
                             } finally {
-                              if (mounted) setState(() => _isLoading = false);
+                              setState(() => _isLoading = false);
                             }
                           },
                     icon: Image.asset('assets/images/google_logo.png', width: 20, height: 20, errorBuilder: (c,e,s) => const Icon(Icons.g_mobiledata)),
@@ -264,24 +436,23 @@ class _LoginPageState extends State<LoginPage> {
                     onPressed: (!_firebaseReady || _isLoading)
                         ? null
                         : () async {
-                            final scaffold = ScaffoldMessenger.of(context);
-                            final nav = Navigator.of(context);
                             setState(() => _isLoading = true);
                             try {
                               final svc = FacebookAuthService();
-                              final backendBase = BackendApi.baseUrl;
+                              final backendBase = Uri.base.host == '' ? 'http://127.0.0.1:5001' : 'http://127.0.0.1:5001';
                               final result = await svc.signInToBackend(backendBase);
                               if (result != null) {
                                 final token = result['token'] as String?;
                                 if (token != null) {
                                   AuthStorage.saveToken(token);
                                 }
-                                await _ensureProfileCompletedAndNavigate(nav);
+                                await _routeAfterLogin();
                               }
-                            } catch (e) {
-                              scaffold.showSnackBar(SnackBar(content: Text('Facebook sign-in failed: $e')));
+                            } catch (e, st) {
+                              EventBus.instance.emitError('Đăng nhập bằng Facebook thất bại. Vui lòng thử lại.');
+                              if (kDebugMode) debugPrint('Login: Facebook sign-in failed: $e\n$st');
                             } finally {
-                              if (mounted) setState(() => _isLoading = false);
+                              setState(() => _isLoading = false);
                             }
                           },
                     icon: Image.asset('assets/images/facebook_logo.png', width: 20, height: 20, errorBuilder: (c,e,s) => const Icon(Icons.facebook)),
@@ -323,55 +494,4 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
-}
-
-// Helper placed after the LoginPage class to reuse imports
-Future<void> _ensureProfileCompletedAndNavigate(NavigatorState nav) async {
-  // This can only be called when FirebaseAuth.currentUser is non-null
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
-
-  final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-  final data = doc.data() ?? {};
-
-  // Check multiple locations for a name/email to consider profile complete
-  String? resolveName(Map<String, dynamic> d) {
-    final candidates = [
-      d['fullName'],
-      d['displayName'],
-      d['name'],
-    ];
-    for (final c in candidates) {
-      if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
-    }
-    // nested profile map
-    final p = d['profile'];
-    if (p is Map<String, dynamic>) {
-      final pc = [p['fullName'], p['displayName'], p['name']];
-      for (final c in pc) {
-        if (c != null && c.toString().trim().isNotEmpty) return c.toString().trim();
-      }
-    }
-    return null;
-  }
-
-  final hasName = resolveName(data) != null;
-
-  // If profile missing, open EditProfilePage; if user cancels, remain on Login screen
-  if (!hasName) {
-    final saved = await nav.push<bool>(MaterialPageRoute(builder: (_) => const EditProfilePage()));
-    if (saved == true) {
-      // reload doc and continue
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      // navigate into app
-      nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
-    } else {
-      // user cancelled: do not auto-navigate into app
-      return;
-    }
-    return;
-  }
-
-  // profile exists: go straight into app
-  nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
 }

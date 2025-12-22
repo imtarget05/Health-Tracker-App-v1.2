@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import './login.dart';
-import '../../services/backend_api.dart';
-import '../../services/auth_storage.dart';
+// ...existing imports...
+import '../../services/pending_signup.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../firebase_options.dart';
+import '../../services/backend_api.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/profile_sync_service.dart';
 import '../profile/edit_profile.dart';
+import '../input_information/welcome_screen.dart';
 import '../welcome/onboarding_screen.dart';
+import '../fitness_app_home_screen.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 class RegisterPage extends StatefulWidget {
-  RegisterPage({super.key, required this.title});
+  const RegisterPage({super.key, required this.title});
   final String title;
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -59,6 +64,14 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  // Heuristic to detect noisy platform/network error strings so the UI
+  // doesn't surface them as raw toasts. Return true if message looks like
+  // a transient network/platform error that we should suppress.
+  // NOTE: _isNetworkError removed to make registration errors easier to debug.
+  // Previously we converted noisy platform network errors into a friendly message.
+  // This made it hard to see the original error during troubleshooting, so we
+  // now emit the computed error message directly from registration code.
+
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
       _performSignup();
@@ -70,59 +83,188 @@ class _RegisterPageState extends State<RegisterPage> {
     final password = _passwordController.text.trim();
     final phone = _phoneController.text.trim();
 
-    // capture context-bound objects before async gaps
-    final scaffold = ScaffoldMessenger.of(context);
-    final nav = Navigator.of(context);
+  // capture context-bound objects before async gaps
+  final nav = Navigator.of(context);
+  final rootNav = Navigator.of(context, rootNavigator: true);
 
     setState(() {});
 
+    bool _dialogClosed = false;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-  final res = await BackendApi.signup(
-        fullName: email.split('@').first,
-        email: email,
-        password: password,
-        phone: phone.isEmpty ? null : phone,
-      );
-
-  // backend returns token in body; store it for later API calls
-  final backendToken = res['token'] as String?;
-  if (backendToken != null) AuthStorage.saveToken(backendToken);
-
-      if (Firebase.apps.isEmpty) {
-        try {
+      // Ensure Firebase is initialized before attempting Auth
+      try {
+        if (Firebase.apps.isEmpty) {
           await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-        } catch (initErr) {
-          if (mounted) nav.pop();
-          scaffold.showSnackBar(
-            SnackBar(content: Text('Firebase init failed: $initErr')),
-          );
-          return;
         }
-      }
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-  // After sign-in, ensure the user completes profile once if missing
-  if (mounted) nav.pop();
-
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
-        nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
+      } catch (initErr) {
+        try { if (mounted) nav.pop(); } catch (_) {}
+        debugPrint('Register: Firebase init failed: $initErr');
+        EventBus.instance.emitError('Unable to initialize Firebase. Please try again.');
         return;
       }
 
-      // Check firestore for existing profile info
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final data = doc.data() ?? {};
+      // Save pending signup info and attempt backend registration immediately.
+      PendingSignup.set(email: email, password: password, fullName: email.split('@').first, phone: phone.isNotEmpty ? phone : null);
+      try {
+        final peek = PendingSignup.peek();
+        if (peek != null) {
+          final resp = await BackendApi.signup(
+            fullName: peek['fullName'] ?? '',
+            email: peek['email'] ?? '',
+            password: peek['password'] ?? '',
+            phone: peek['phone'],
+          );
+          // If backend returned a Firebase custom token, sign the client in so
+          // the Firebase client SDK has a proper authenticated user and ID token.
+          final custom = resp != null && resp['firebaseCustomToken'] != null ? resp['firebaseCustomToken'] as String? : null;
+          if (custom != null) {
+            try {
+              await FirebaseAuth.instance.signInWithCustomToken(custom);
+              // consume only if backend signup and client sign-in succeeded
+              PendingSignup.consume();
+            } catch (e) {
+              debugPrint('Register: signInWithCustomToken failed: $e');
+              // keep PendingSignup for later retry
+            }
+          } else {
+            // No custom token; consume pending since backend signup succeeded.
+            PendingSignup.consume();
+          }
+        }
+      } catch (e, st) {
+        debugPrint('Register: immediate backend signup failed, will keep PendingSignup for retry: $e\n$st');
+      }
+
+  // Try to create a Firebase user. If the email already exists, fall back to sign-in.
+      // Track whether this call created a new user so we can route newly-registered users
+      // into the input-information flow (WelcomeScreen) unconditionally.
+  bool createdNewUser = false;
+  String? createdUid;
+      try {
+        // If the client is already signed in (for example we signed in with a
+        // backend-provided custom token above), skip createUser and treat the
+        // existing session as the created user.
+        final existing = FirebaseAuth.instance.currentUser;
+        if (existing != null) {
+          createdNewUser = true;
+          createdUid = existing.uid;
+        } else {
+          final uc = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+          createdNewUser = true;
+          createdUid = uc.user?.uid;
+        }
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use' || e.code == 'email-already-exists') {
+          // existing account, attempt sign-in
+          final signin = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+          createdUid = signin.user?.uid;
+        } else {
+          // If this looks like a transient network/plugin error, don't block the user.
+          // We already saved PendingSignup above; allow the user to continue through
+          // the onboarding/input flow and let background sync handle account creation
+          // when network is available.
+          final raw = e.message ?? e.toString();
+          final detected = _isNetworkError(raw);
+          if (detected) {
+            debugPrint('Register: createUser network-like error; proceeding with pending signup: $raw');
+            // We couldn't create the Firebase user due to transient network issues.
+            // Keep pending signup saved but don't mark createdNewUser (no uid available).
+            // pendingOnly was removed; keep behavior by falling through with PendingSignup saved.
+          } else {
+            // rethrow to be handled by outer catch
+            rethrow;
+          }
+        }
+      }
+
+
+  // After sign-in, ensure the user completes profile once if missing
+  // nav.pop() must be done in finally below to ensure the dialog is closed
+
+      final user = FirebaseAuth.instance.currentUser;
+      // If we created a new user (including the transient network-pending case),
+      // prefer routing to the Welcome/input-information flow so the user can
+      // complete their profile. We saved PendingSignup above so sync can finish later.
+      if (createdNewUser) {
+        // Close the loading dialog (if still open) before navigating so the
+        // navigation stack remains consistent.
+        try {
+          if (!_dialogClosed) {
+            if (mounted) nav.pop();
+            _dialogClosed = true;
+          }
+        } catch (_) {}
+
+        // Persist a minimal user document so onboarding / welcome screens
+        // have a predictable shape to render. Use any PendingSignup info
+        // (fullName/email) we captured earlier.
+        try {
+          final pending = PendingSignup.peek();
+          final uidToWrite = createdUid ?? FirebaseAuth.instance.currentUser?.uid;
+            if (uidToWrite != null) {
+            final docRef = FirebaseFirestore.instance.collection('users').doc(uidToWrite);
+            final minimal = <String, dynamic>{
+              'uid': uidToWrite,
+              'email': (FirebaseAuth.instance.currentUser?.email) ?? pending?['email'],
+              'createdAt': DateTime.now().toIso8601String(),
+              'profile': {
+                'fullName': pending != null ? (pending['fullName'] ?? '') : (FirebaseAuth.instance.currentUser?.email?.split('@').first ?? ''),
+                // other profile fields left absent so UI will treat them as missing
+              }
+            };
+            await docRef.set(minimal, SetOptions(merge: true));
+              // Minimal user doc written — do not call backend here because
+              // we already attempted immediate backend signup earlier. The
+              // PendingSignup will be consumed if the earlier call succeeded.
+          } else {
+            debugPrint('Register: no uid available to write minimal user doc');
+          }
+        } catch (e, st) {
+          if (mounted) debugPrint('Register: failed to write minimal user doc: $e\n$st');
+        }
+
+        if (mounted) {
+          // Emit diagnostic info: current auth uid and profile sync queue length
+          final currentUid = FirebaseAuth.instance.currentUser?.uid;
+          final queueLen = ProfileSyncService.instance.readQueue().length;
+          debugPrint('Register: navigating to OnboardingScreen (createdNewUser) uid=$currentUid queue=$queueLen');
+          EventBus.instance.emitInfo('Debug: uid=${currentUid ?? '<null>'} queued=${queueLen}');
+          EventBus.instance.emitSuccess('Registration successful.');
+          rootNav.pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+        }
+        return;
+      }
+
+      if (user == null) {
+        try { if (!_dialogClosed) { if (mounted) nav.pop(); _dialogClosed = true; } } catch (_) {}
+        if (mounted) {
+          final currentUid = FirebaseAuth.instance.currentUser?.uid;
+          final queueLen = ProfileSyncService.instance.readQueue().length;
+          debugPrint('Register: navigating to OnboardingScreen (no user) uid=$currentUid queue=$queueLen');
+          EventBus.instance.emitInfo('Debug: uid=${currentUid ?? '<null>'} queued=${queueLen}');
+          EventBus.instance.emitSuccess('Registration successful.');
+          rootNav.pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+        }
+        return;
+      }
+
+      // Check firestore for existing profile info. If reads are blocked by
+      // security rules (permission-denied) or network errors occur, assume
+      // backend will handle profile creation and proceed into the app.
+      Map<String, dynamic> data = {};
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        data = doc.data() ?? {};
+      } catch (e) {
+        // ignore firestore read errors and continue
+        data = {};
+      }
 
       String? resolveName(Map<String, dynamic> d) {
         final candidates = [d['fullName'], d['displayName'], d['name']];
@@ -139,6 +281,58 @@ class _RegisterPageState extends State<RegisterPage> {
         return null;
       }
 
+      bool needsInputInformation(Map<String, dynamic> d) {
+        final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+        dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+        final age = getField('age');
+        final gender = getField('gender');
+        final weightKg = getField('weightKg');
+        final heightCm = getField('heightCm');
+        final idealWeightKg = getField('idealWeightKg');
+        final deadline = getField('deadline');
+        if (age == null) return true;
+        if (gender == null || gender.toString().trim().isEmpty) return true;
+        if (weightKg == null) return true;
+        if (heightCm == null) return true;
+        if (idealWeightKg == null) return true;
+        if (deadline == null || deadline.toString().trim().isEmpty) return true;
+        return false;
+      }
+
+      bool needsOnboarding(Map<String, dynamic> d) {
+        final p = (d['profile'] is Map<String, dynamic>) ? d['profile'] as Map<String, dynamic> : <String, dynamic>{};
+        dynamic getField(String key) => p.containsKey(key) ? p[key] : d[key];
+        final training = getField('trainingIntensity');
+        final diet = getField('dietPlan');
+        final onboardingName = getField('fullName') ?? getField('displayName') ?? getField('name');
+        if (training == null || training.toString().trim().isEmpty) return true;
+        if (diet == null || diet.toString().trim().isEmpty) return true;
+        if (onboardingName == null || onboardingName.toString().trim().isEmpty) return true;
+        return false;
+      }
+
+      // If the user was just created, always route them into the input-information
+      // flow first so they can complete the required fields. For existing accounts
+      // we keep the previous heuristics (onboarding -> input information -> home).
+      if (createdNewUser) {
+        if (mounted) {
+            nav.pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+        }
+        return;
+      }
+
+      // If onboarding fields are missing, route user into onboarding_contents first
+      if (needsOnboarding(data)) {
+        if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen()));
+        return;
+      }
+
+      // If input-information fields are missing, route to WelcomeScreen
+      if (needsInputInformation(data)) {
+        if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const WelcomeScreen()));
+        return;
+      }
+
       if (resolveName(data) == null) {
         // Force the user to complete profile. If they cancel, ask to retry or logout.
         bool completed = false;
@@ -153,11 +347,11 @@ class _RegisterPageState extends State<RegisterPage> {
           final choice = await showDialog<bool>(
             context: context,
             builder: (c) => AlertDialog(
-              title: const Text('Yêu cầu hoàn thành hồ sơ'),
-              content: const Text('Bạn phải hoàn thành hồ sơ để tiếp tục sử dụng ứng dụng. Muốn thử lại hay đăng xuất?'),
+              title: const Text('Profile Completion Required'),
+              content: const Text('Please complete your profile to continue. Would you like to retry or sign out?'),
               actions: [
-                TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Thử lại')),
-                TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Đăng xuất')),
+                TextButton(onPressed: () => Navigator.of(c).pop(true), child: const Text('Retry')),
+                TextButton(onPressed: () => Navigator.of(c).pop(false), child: const Text('Sign out')),
               ],
             ),
           );
@@ -168,45 +362,107 @@ class _RegisterPageState extends State<RegisterPage> {
         }
       }
 
-  if (mounted) scaffold.showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
-  if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => OnboardingScreen()));
-    } on FirebaseAuthException catch (e) {
-  if (mounted) nav.pop();
-      String errorMsg = 'Đăng ký thất bại';
+      if (mounted) EventBus.instance.emitSuccess('Registration successful.');
+      if (mounted) nav.pushReplacement(MaterialPageRoute(builder: (_) => const FitnessAppHomeScreen()));
+  } on FirebaseAuthException catch (e) {
+      // Handled below after finally
+      String errorMsg = 'Registration failed';
       if (e.code == 'email-already-in-use' || e.code == 'email-already-exists') {
-        errorMsg = 'Email đã tồn tại.';
+        errorMsg = 'Email already in use.';
       } else if (e.code == 'weak-password') {
-        errorMsg = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+        errorMsg = 'Password is too weak (minimum 6 characters).';
       } else if (e.code == 'invalid-email') {
-        errorMsg = 'Email không hợp lệ.';
+        errorMsg = 'Invalid email address.';
       } else {
-        errorMsg = e.message ?? errorMsg;
+        final raw = e.message ?? e.toString();
+        final detected = _isNetworkError(raw);
+        if (mounted) debugPrint('Register: raw FirebaseAuthException message="$raw" detectedNetwork=$detected');
+        if (detected) {
+          errorMsg = 'Temporary network error. Please check your connection and try again.';
+          if (mounted) debugPrint('Register: raw FirebaseAuthException (network-like): $raw');
+        } else {
+          errorMsg = raw;
+        }
       }
-      scaffold.showSnackBar(
-        SnackBar(content: Text(errorMsg)),
-      );
+  // Emit the computed error message (or a friendly network message) and
+  // keep raw details in debug logs for developers.
+  _emitFriendlyError(e, errorMsg);
+  if (mounted) debugPrint('Register: error emitted: $errorMsg');
     } catch (e) {
-  if (mounted) nav.pop();
-  String errorMsg = 'Đăng ký thất bại';
+  String errorMsg = 'Registration failed';
       if (e.toString().contains('email-already-exists') || e.toString().contains('email-already-in-use')) {
-        errorMsg = 'Email đã tồn tại.';
+        errorMsg = 'Email already in use.';
       } else if (e.toString().contains('weak-password')) {
-        errorMsg = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
+        errorMsg = 'Password is too weak (minimum 6 characters).';
       } else if (e.toString().contains('invalid-email')) {
-        errorMsg = 'Email không hợp lệ.';
+        errorMsg = 'Invalid email address.';
       } else {
-        errorMsg = e.toString();
+        // keep the raw message in logs for debugging but avoid showing raw
+        // network/plugin messages directly to users which are noisy.
+        final raw = e.toString();
+        final detected = _isNetworkError(raw);
+        if (mounted) debugPrint('Register: raw exception message="$raw" detectedNetwork=$detected');
+        if (detected) {
+          errorMsg = 'Temporary network error. Please check your connection and try again.';
+          if (mounted) debugPrint('Register: raw error (network-like): $raw');
+        } else {
+          errorMsg = raw;
+        }
       }
-      scaffold.showSnackBar(
-        SnackBar(content: Text(errorMsg)),
-      );
+  _emitFriendlyError(e, errorMsg);
+  if (mounted) debugPrint('Register: error emitted: $errorMsg');
+    } finally {
+      // Ensure loading dialog is dismissed exactly once
+      try {
+        if (!_dialogClosed) {
+          if (mounted) nav.pop();
+          _dialogClosed = true;
+        }
+      } catch (_) {}
     }
+  }
+
+  // Heuristic to detect noisy platform/network error strings so the UI
+  // doesn't surface them as raw toasts. This is specific to registration
+  // flow to avoid showing long plugin messages to end users while still
+  // preserving the raw message in debug logs for troubleshooting.
+  bool _isNetworkError(String? message) {
+    if (message == null) return false;
+    final m = message.toLowerCase();
+    final networkIndicators = [
+      'network error',
+      'timeout',
+      'interrupted connection',
+      'unreachable host',
+      'socketexception',
+      'host lookup',
+      'network is unreachable',
+      'failed host lookup',
+      'connection timed out',
+    ];
+    for (final s in networkIndicators) {
+      if (m.contains(s)) return true;
+    }
+    return false;
+  }
+
+  void _emitFriendlyError(Object? raw, [String? fallback]) {
+    final rawStr = raw?.toString();
+    if (_isNetworkError(rawStr)) {
+      debugPrint('Register: raw error (network-like): $rawStr');
+      EventBus.instance.emitError('Temporary network error. Please check your connection and try again.');
+      return;
+    }
+    final msg = fallback ?? rawStr ?? 'Registration failed. Please try again.';
+    debugPrint('Register: error emitted (raw): $rawStr');
+    EventBus.instance.emitError(msg);
   }
 
   @override
   Widget build(BuildContext context) {
   // responsive helpers (width available if needed)
-  final width = MediaQuery.of(context).size.width;
+  // ignore: unused_local_variable
+  final width = MediaQuery.of(context).size.width; // intentionally unused helper
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),

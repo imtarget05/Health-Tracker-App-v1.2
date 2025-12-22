@@ -180,13 +180,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     onPressed: () {
                       Navigator.pop(context);
                     },
-                    child: Text("Back", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Back", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                   ElevatedButton(
                     onPressed: () {
@@ -200,18 +200,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         }
                       };
                       ProfileSyncService.instance.saveProfilePartial(data);
-                      Navigator.push(
+                      Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => FutureScreen()),
+                        MaterialPageRoute(builder: (_) => const FutureScreen()),
                       );
                     },
-                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                 ],
               ),

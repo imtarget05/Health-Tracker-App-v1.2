@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
 import '../models/diary.dart';
 
 class DiaryService {
@@ -44,16 +45,30 @@ class DiaryService {
   Future<void> addMeal(DateTime date, Meal meal) async {
     final id = _docIdForDate(date);
     final docRef = _userDiaries.doc(id);
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(docRef);
-      final data = snap.exists ? Map<String, dynamic>.from(snap.data() as Map<String, dynamic>) : {};
-      final meals = (data['meals'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e)).toList() ?? [];
-      meals.add(meal.toMap());
-      tx.set(docRef, {
-        'meals': meals,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    });
+  // Diagnostic: log target path and uid to help debug transaction failures
+  debugPrint('DiaryService.addMeal: uid=$uid doc=${docRef.path}');
+    // Perform a simple read-modify-write with retries to avoid using Firestore transactions,
+    // which have caused platform/ emulator 'transactionGet' errors on some setups.
+    const int maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final snap = await docRef.get();
+        final data = snap.exists ? Map<String, dynamic>.from(snap.data() as Map<String, dynamic>) : {};
+        final meals = (data['meals'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e)).toList() ?? [];
+        meals.add(meal.toMap());
+        await docRef.set({
+          'meals': meals,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint('DiaryService.addMeal: write succeeded on attempt $attempt');
+        return;
+      } catch (e, st) {
+        debugPrint('DiaryService.addMeal: write attempt $attempt failed: $e');
+        debugPrintStack(label: 'DiaryService.addMeal write stack', stackTrace: st);
+        if (attempt == maxAttempts) rethrow;
+        await Future.delayed(Duration(milliseconds: 200 * attempt));
+      }
+    }
   }
 
   Future<void> incrementWater(DateTime date, int deltaMl) async {
@@ -63,7 +78,8 @@ class DiaryService {
       final snap = await tx.get(docRef);
       final data = snap.exists ? Map<String, dynamic>.from(snap.data() as Map<String, dynamic>) : {};
       final current = (data['water'] != null && data['water']['consumedMl'] != null) ? (data['water']['consumedMl'] as num).toInt() : 0;
-      final newVal = current + deltaMl;
+      int newVal = current + deltaMl;
+      if (newVal < 0) newVal = 0; // prevent negative consumed values
       final waterMap = {
         'consumedMl': newVal,
         'dailyGoalMl': data['water'] != null && data['water']['dailyGoalMl'] != null ? (data['water']['dailyGoalMl'] as num).toInt() : 2000,
@@ -73,6 +89,21 @@ class DiaryService {
         'water': waterMap,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      // Mirror key water fields into the user's profile document so profile-driven UI and reminders
+      // can read lastDrinkAt and today's consumed amount without reading diary doc.
+      try {
+        final userDoc = _db.collection('users').doc(uid);
+        await userDoc.set({
+          'water': {
+            'lastDrinkAt': waterMap['lastDrinkAt'],
+            'consumedTodayMl': newVal,
+            'dailyGoalMl': waterMap['dailyGoalMl'],
+          },
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        // ignore non-fatal profile mirror errors
+      }
     });
   }
 
@@ -82,5 +113,35 @@ class DiaryService {
       'water': {'dailyGoalMl': goalMl},
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  /// Update body measurements (height, bmi, bodyFatPercent) for the diary of [date].
+  Future<void> updateBodyMeasurements(DateTime date, double heightCm, double bmi, double bodyFatPercent) async {
+    final id = _docIdForDate(date);
+    final bodyMap = {
+      'heightCm': heightCm,
+      'bmi': bmi,
+      'bodyFatPercent': bodyFatPercent,
+      'recordedAt': Timestamp.now(),
+    };
+    await _userDiaries.doc(id).set({
+      'bodyMeasurements': bodyMap,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    // Also mirror key body fields into the user's profile document so profile-driven UI
+    // that reads `profile.heightCm` / `profile.weightKg` / `profile.bmi` sees updates.
+    try {
+      final userDoc = _db.collection('users').doc(uid);
+      final profileUpdates = <String, dynamic>{
+        'heightCm': heightCm,
+        'bmi': bmi,
+  'bodyFatPercent': bodyFatPercent,
+  'updatedAt': FieldValue.serverTimestamp(),
+      };
+      await userDoc.set(profileUpdates, SetOptions(merge: true));
+    } catch (e) {
+      // Non-fatal: diary update already applied. Log for debugging.
+      // ignore errors quietly in UI context
+    }
   }
 }

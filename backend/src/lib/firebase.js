@@ -26,7 +26,13 @@ const initializeFirebase = async () => {
         const isEmulator = !!process.env.FIRESTORE_EMULATOR_HOST || process.env.USE_FIREBASE_EMULATOR === "1";
         if (isEmulator) {
             // When using the emulator, avoid requiring a real service account.
-            app = admin.initializeApp();
+            // Ensure firebase-admin has an explicit project ID so it does not
+            // try to query the GCE metadata server (which fails on dev machines).
+            const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+            if (projectId) {
+                process.env.GCLOUD_PROJECT = projectId;
+            }
+            app = admin.initializeApp({ projectId });
             auth = admin.auth();
             db = admin.firestore();
             storage = admin.storage ? admin.storage() : undefined;
@@ -38,21 +44,9 @@ const initializeFirebase = async () => {
         }
 
         // 🔐 Service account (fix key \n)
-        // DEBUG: inspect FIREBASE_PRIVATE_KEY at runtime
-        try {
-            const rawKey = process.env.FIREBASE_PRIVATE_KEY;
-            console.log('DEBUG: FIREBASE_PRIVATE_KEY type=', typeof rawKey);
-            console.log('DEBUG: FIREBASE_PRIVATE_KEY length=', rawKey ? rawKey.length : 0);
-            console.log('DEBUG: FIREBASE_PRIVATE_KEY contains literal \\n=', rawKey ? rawKey.indexOf('\\n') !== -1 : false);
-            // print a short preview (first/last 60 chars) without exposing full key
-            if (rawKey) {
-                const previewStart = rawKey.slice(0, 60).replace(/\n/g, '\\n');
-                const previewEnd = rawKey.slice(-60).replace(/\n/g, '\\n');
-                console.log('DEBUG: FIREBASE_PRIVATE_KEY preview start=', previewStart);
-                console.log('DEBUG: FIREBASE_PRIVATE_KEY preview end=', previewEnd);
-            }
-        } catch (e) {
-            console.log('DEBUG: error inspecting FIREBASE_PRIVATE_KEY', e?.message || e);
+        // Do not log private key material. Keep only light initialization logs.
+        if (!process.env.FIREBASE_PRIVATE_KEY) {
+            console.warn('Firebase private key not provided in environment; ensure service account is available for production.');
         }
 
         // � Service account object (support escaped \n in .env)

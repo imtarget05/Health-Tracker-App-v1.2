@@ -9,6 +9,8 @@ class ProfileHeader extends StatefulWidget {
   final double? weightKg;
   final double? heightCm;
   final DateTime? lastUpdated;
+  final int? dailyWaterMl;
+  // BMI will be calculated from weightKg and heightCm
   final Animation<double> animation;
   final AnimationController animationController;
   final VoidCallback? onLogout;
@@ -22,7 +24,8 @@ class ProfileHeader extends StatefulWidget {
     this.email,
     this.weightKg,
     this.heightCm,
-    this.lastUpdated,
+  this.lastUpdated,
+  this.dailyWaterMl,
     required this.animation,
     required this.animationController,
   this.onLogout,
@@ -247,6 +250,28 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                             Text(_formatLastUpdated(), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                             const SizedBox(height: 4),
                             const Text('Cập nhật', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            if (widget.dailyWaterMl != null) ...[
+                              const SizedBox(height: 8),
+                              Text('${widget.dailyWaterMl} ml', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const Text('Mục tiêu nước', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
+                            // BMI calculation and display
+                            if (widget.weightKg != null && widget.heightCm != null) ...[
+                              const SizedBox(height: 8),
+                              Builder(builder: (ctx) {
+                                final hM = widget.heightCm! / 100.0;
+                                final bmi = hM > 0 ? (widget.weightKg! / (hM * hM)) : null;
+                                final bmiText = bmi != null ? bmi.toStringAsFixed(1) : '—';
+                                String category = '';
+                                if (bmi != null) {
+                                  if (bmi < 18.5) category = 'Thiếu cân';
+                                  else if (bmi < 25) category = 'Bình thường';
+                                  else if (bmi < 30) category = 'Thừa cân';
+                                  else category = 'Béo phì';
+                                }
+                                return Column(children: [Text(bmiText, style: const TextStyle(fontWeight: FontWeight.bold)), const SizedBox(height: 2), Text('BMI${category.isNotEmpty ? ' • ' + category : ''}', style: TextStyle(fontSize: 12, color: Colors.grey[700]))]);
+                              }),
+                            ],
                           ],
                         ),
                       ),

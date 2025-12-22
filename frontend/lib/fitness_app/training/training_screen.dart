@@ -142,13 +142,15 @@ class _TrainingScreenState extends State<TrainingScreen>
         if (!snapshot.hasData) {
           return const SizedBox();
         } else {
+          final bottomInset = MediaQuery.of(context).padding.bottom + 96; // allow room for bottom nav + FAB
           return ListView.builder(
             controller: scrollController,
+            physics: const BouncingScrollPhysics(),
             padding: EdgeInsets.only(
               top: AppBar().preferredSize.height +
                   MediaQuery.of(context).padding.top +
                   24,
-              bottom: 0 ,
+              bottom: bottomInset,
             ),
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,

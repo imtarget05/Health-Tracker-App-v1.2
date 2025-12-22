@@ -1,7 +1,14 @@
+// Ignore some info-level lints in this compatibility file.
+// The UI code uses private State classes which is normal for Widgets.
+// We suppress the 'library_private_types_in_public_api' rule here to
+// reduce analyzer noise while keeping the code unchanged.
+// ignore_for_file: library_private_types_in_public_api
+
 import 'dart:math' as math;
 import 'package:best_flutter_ui_templates/fitness_app/fitness_app_theme.dart';
-import 'package:best_flutter_ui_templates/fitness_app/models/tabIcon_data.dart';
+import 'package:best_flutter_ui_templates/fitness_app/models/tab_icon_data.dart';
 import 'package:best_flutter_ui_templates/main.dart';
+import '../camera/camera_screen.dart';
 import 'package:flutter/material.dart';
 
 
@@ -162,7 +169,10 @@ class _BottomBarViewState extends State<BottomBarView>
                           splashColor: Colors.white.withAlpha((0.1 * 255).round()),
                           highlightColor: Colors.transparent,
                           focusColor: Colors.transparent,
-                          onTap: widget.addClick,
+                          onTap: () {
+                            if (widget.addClick != null) widget.addClick!();
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ScanScreen()));
+                          },
                           child: Icon(
                             Icons.camera_enhance_rounded,
                             color: FitnessAppTheme.white,

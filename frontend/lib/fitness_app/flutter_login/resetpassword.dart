@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uni_links/uni_links.dart';
 import 'dart:async';
 import '../../firebase_options.dart';
 
 import 'login.dart';
+import 'package:best_flutter_ui_templates/services/event_bus.dart';
 
 
 class ResetPasswordPage extends StatefulWidget {
-  ResetPasswordPage({super.key, required this.title});
+  const ResetPasswordPage({super.key, required this.title});
   final String title;
   @override
   State<ResetPasswordPage> createState() => _ResetPasswordPageState();
@@ -30,6 +28,26 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     super.initState();
     _ensureFirebaseInitialized();
     _initUniLinks();
+  }
+
+  bool _isNetworkError(String? message) {
+    if (message == null) return false;
+    final m = message.toLowerCase();
+    return m.contains('network') || m.contains('timeout') || m.contains('interrupted') ||
+        m.contains('unreachable') || m.contains('socketexception') || m.contains('failed host lookup') ||
+        m.contains('host lookup') || m.contains('connection timed out');
+  }
+
+  void _emitFriendlyError(Object? raw, [String? fallback]) {
+    final rawStr = raw?.toString();
+    if (_isNetworkError(rawStr)) {
+      debugPrint('ResetPassword: raw error (network-like): $rawStr');
+      EventBus.instance.emitError('Lỗi mạng tạm thời. Vui lòng kiểm tra kết nối và thử lại.');
+      return;
+    }
+    final msg = fallback ?? rawStr ?? 'Đã xảy ra lỗi. Vui lòng thử lại.';
+    debugPrint('ResetPassword: error emitted (raw): $rawStr');
+    EventBus.instance.emitError(msg);
   }
 
   StreamSubscription? _sub;
@@ -96,9 +114,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // capture context-bound objects before async gaps
-    final scaffold = ScaffoldMessenger.of(context);
-    final nav = Navigator.of(context);
+  // capture context-bound objects before async gaps
+  final nav = Navigator.of(context);
 
     setState(() => _isLoading = true);
     try {
@@ -107,9 +124,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
           await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
         } catch (initErr) {
           setState(() => _isLoading = false);
-          scaffold.showSnackBar(
-            SnackBar(content: Text('Firebase init failed: $initErr')),
-          );
+      _emitFriendlyError(initErr, 'Unable to initialize Firebase. Please try again.');
           return;
         }
       }
@@ -131,9 +146,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         actionCodeSettings: actionCodeSettings,
       );
   setState(() => _isLoading = false);
-  scaffold.showSnackBar(
-        const SnackBar(content: Text('Password reset link sent. Check your email.')),
-      );
+  EventBus.instance.emitSuccess('Password reset link sent. Check your email.');
       await Future.delayed(const Duration(milliseconds: 700));
   nav.pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -141,20 +154,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       );
     } on FirebaseAuthException catch (e) {
   setState(() => _isLoading = false);
-  String msg = 'Failed to send reset email.';
+  String msg = 'Không gửi được email đặt lại.';
       if (e.code == 'user-not-found') {
-        msg = 'No user found for that email.';
+        msg = 'Không tìm thấy tài khoản với email này.';
       } else if (e.message != null) {
-        msg = e.message!;
+        // Use the SDK message only if it is not a noisy network/platform message
+        if (!_isNetworkError(e.message)) msg = e.message!;
       }
-      scaffold.showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+  _emitFriendlyError(e, msg);
     } catch (e) {
       setState(() => _isLoading = false);
-      scaffold.showSnackBar(
-        const SnackBar(content: Text('An error occurred. Please try again.')),
-      );
+  _emitFriendlyError(e, 'An error occurred. Please try again.');
     }
   }
 

@@ -1,5 +1,6 @@
 // src/controllers/upload.controller.js
 import fs from "fs/promises";
+import path from "path";
 import { firebasePromise, getDb, getBucket } from "../lib/firebase.js";
 import { AI_SERVICE_URL } from "../config/env.js";
 import aiClient from "../services/aiClient.js";
@@ -28,21 +29,15 @@ export const uploadFileController = async (req, res) => {
         const originalName = req.file.originalname;
         const mimeType = req.file.mimetype;
 
-        // 1. Upload ảnh lên Firebase Storage
-        const fileNameOnBucket = `food-images/${Date.now()}-${originalName}`;
-        await bucket.upload(localPath, {
-            destination: fileNameOnBucket,
-            metadata: { contentType: mimeType },
-        });
-
-        const imageUrl = getPublicUrl(bucket, fileNameOnBucket);
-
-        // 2. Gọi AI service
+        // We intentionally do NOT upload the image to Firebase Storage in this flow.
+        // The frontend should save the image locally and associate it with the returned Firestore document id.
+        // Read the local temp file and send bytes to the AI service.
         const fileBuffer = await fs.readFile(localPath);
 
         let aiData;
         try {
-            aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 12000, retries: 2 });
+            // Allow longer timeout for inference-heavy models and forward AI API key from env
+            aiData = await aiClient.postPredict(`${AI_SERVICE_URL}/predict`, fileBuffer, { timeout: 30000, retries: 3, aiApiKey: process.env.AI_API_KEY });
         } catch (err) {
             // log and notify user if auth
             console.error('AI service error:', err?.message || err, err?.raw ? `rawLen=${String(err.raw).slice(0, 200)}` : '');
@@ -87,8 +82,10 @@ export const uploadFileController = async (req, res) => {
 
         const logData = {
             userId,
-            imagePath: fileNameOnBucket,
-            imageUrl,
+            // We do not store the image in cloud storage here. The frontend app is expected
+            // to save the image locally and reference the Firestore document id returned by this endpoint.
+            imagePath: null,
+            imageUrl: null,
             detections,
             totalNutrition,
             itemsCount,
@@ -126,9 +123,12 @@ export const uploadFileController = async (req, res) => {
             console.warn("Cannot remove temp file:", localPath, e.message);
         }
 
+        // Suggest a filename the frontend can use to persist the image locally.
+        const suggestedLocalFilename = `${docRef.id}${path.extname(originalName) || '.jpg'}`;
+
         return res.status(200).json({
             id: docRef.id,
-            imageUrl,
+            suggestedLocalFilename,
             itemsCount,
             detections,
             totalNutrition,
@@ -149,5 +149,41 @@ export const uploadFileController = async (req, res) => {
         return res.status(500).json({
             message: "Internal server error",
         });
+    }
+};
+
+// Dedicated avatar upload endpoint: upload image to `avatars/` and return public URL.
+// This intentionally skips AI processing and does not create a foodDetections record.
+export const uploadAvatarController = async (req, res) => {
+    let localPath;
+    try {
+        await firebasePromise;
+        const bucket = getBucket();
+        if (!req.file) {
+            return res.status(400).json({ message: "File is required (field: file)" });
+        }
+
+        localPath = req.file.path;
+        const originalName = req.file.originalname;
+        const mimeType = req.file.mimetype;
+
+        const fileNameOnBucket = `avatars/${Date.now()}-${originalName}`;
+        await bucket.upload(localPath, {
+            destination: fileNameOnBucket,
+            metadata: { contentType: mimeType },
+        });
+
+        const imageUrl = getPublicUrl(bucket, fileNameOnBucket);
+
+        // Clean up temp file
+        try { await fs.unlink(localPath); } catch (e) { console.warn('Cannot remove temp file:', localPath, e?.message || e); }
+
+        return res.status(200).json({ imageUrl });
+    } catch (error) {
+        console.error('Error in uploadAvatarController:', error);
+        if (localPath) {
+            try { await fs.unlink(localPath); } catch (e) { console.warn('Cannot remove temp file:', localPath, e?.message || e); }
+        }
+        return res.status(500).json({ message: 'Internal server error' });
     }
 };

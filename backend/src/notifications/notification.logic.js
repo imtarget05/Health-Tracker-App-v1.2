@@ -227,6 +227,7 @@ export const buildDailySummaryNote = ({
     targetCalories,
     totalWater,
     targetWater,
+    totalBurned,
 }) => {
     let note = "Một ngày tuyệt vời! Ngày mai tiếp tục phát huy nhé 💪";
 
@@ -292,13 +293,17 @@ export const sendDailySummaryNotification = async ({
     targetCalories,
     totalWater,
     targetWater,
+    totalBurned = 0,
 }) => {
     const summary_note = buildDailySummaryNote({
         totalCalories,
         targetCalories,
         totalWater,
         targetWater,
+        totalBurned,
     });
+
+    const netCalories = Math.round((totalCalories || 0) - (totalBurned || 0));
 
     await sendPushToUser({
         userId,
@@ -308,6 +313,8 @@ export const sendDailySummaryNotification = async ({
             target_calories: Math.round(targetCalories || 0),
             total_water: Math.round(totalWater || 0),
             target_water: Math.round(targetWater || 0),
+            total_burned: Math.round(totalBurned || 0),
+            net_calories: netCalories,
             summary_note,
         },
         data: {
@@ -344,12 +351,33 @@ export const sendStreakReminderIfNeeded = async ({ userId, currentDate }) => {
 
     const streakDays = await computeStreakDays({ userId });
 
-    if (streakDays >= 3) {
+    // Personalize reminder based on streak length and profile (bmi/goal)
+    if (streakDays >= 2) {
+        // load profile for personalization
+        const profileSnap = await db
+            .collection('healthProfiles')
+            .where('userId', '==', userId)
+            .limit(1)
+            .get();
+
+        let bmi = null;
+        let goal = null;
+        if (!profileSnap.empty) {
+            const p = profileSnap.docs[0].data();
+            bmi = p.bmi || null;
+            goal = p.goal || null;
+        }
+
+        const strength = streakDays >= 7 ? 'strong' : 'gentle';
+
         await sendPushToUser({
             userId,
             type: NotificationType.STREAK_REMINDER,
             variables: {
                 streak_days: streakDays,
+                reminder_strength: strength,
+                bmi: bmi || '',
+                goal: goal || '',
             },
         });
     }

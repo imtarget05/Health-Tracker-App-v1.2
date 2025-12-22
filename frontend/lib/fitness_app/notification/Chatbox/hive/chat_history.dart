@@ -2,7 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 part 'chat_history.g.dart';
 
-@HiveType(typeId: 0)
+@HiveType(typeId: 3)
 class ChatHistory extends HiveObject {
   @HiveField(0)
   final String chatId;

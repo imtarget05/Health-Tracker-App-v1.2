@@ -1,5 +1,18 @@
 import cron from "node-cron";
 import { firebasePromise, getDb } from "../lib/firebase.js";
+
+// Helper: return db or null and log friendly error when Firestore is not reachable
+const safeGetDb = async (context = 'unknown') => {
+    try {
+        await firebasePromise;
+        return getDb();
+    } catch (err) {
+        // Friendly, actionable log for operators
+        console.warn(`[Cron][${context}] Firestore unavailable: ${err && (err.message || err)}. ` +
+            `Is FIRESTORE_EMULATOR_HOST set (for dev) or are credentials configured (for prod)?`);
+        return null;
+    }
+};
 import { getUserTargets } from "../lib/targets.js";
 import {
     sendDailySummaryNotification,
@@ -13,8 +26,8 @@ import { NotificationType } from "./notification.templates.js";
 
 // Helper lấy daily totals (calo + nước)
 const getDailyTotals = async (userId, dateStr) => {
-    await firebasePromise;
-    const db = getDb();
+    const db = await safeGetDb('getDailyTotals');
+    if (!db) throw new Error('FirestoreUnavailable');
     // meals
     const mealSnap = await db
         .collection("meals")
@@ -41,13 +54,27 @@ const getDailyTotals = async (userId, dateStr) => {
         totalWater += data.amountMl || 0;
     });
 
-    return { totalCalories, totalWater };
+    // workouts for the date
+    const workoutSnap = await db
+        .collection("workouts")
+        .where("userId", "==", userId)
+        .where("createdAt", ">=", `${dateStr}T00:00:00.000Z`)
+        .where("createdAt", "<=", `${dateStr}T23:59:59.999Z`)
+        .get();
+
+    let totalBurned = 0;
+    workoutSnap.forEach((doc) => {
+        const data = doc.data();
+        totalBurned += data.caloriesBurned || 0;
+    });
+
+    return { totalCalories, totalWater, totalBurned };
 };
 
 // Helper: lấy tất cả userId có healthProfiles (để gửi summary)
 const getAllActiveUserIds = async () => {
-    await firebasePromise;
-    const db = getDb();
+    const db = await safeGetDb('getAllActiveUserIds');
+    if (!db) return [];
     const snap = await db.collection("healthProfiles").get();
     const ids = new Set();
     snap.forEach((doc) => {
@@ -63,8 +90,8 @@ const getInactiveUserIds = async (days) => {
     const cutoff = new Date(now);
     cutoff.setDate(now.getDate() - days);
 
-    await firebasePromise;
-    const db = getDb();
+    const db = await safeGetDb('getInactiveUserIds');
+    if (!db) return [];
 
     const snap = await db
         .collection("users") // collection profile user
@@ -98,7 +125,7 @@ export const startNotificationSchedulers = () => {
                 chunk.map(async (userId) => {
                     try {
                         const { targetCalories, targetWaterMlPerDay } = await getUserTargets(userId);
-                        const { totalCalories, totalWater } = await getDailyTotals(
+                        const { totalCalories, totalWater, totalBurned } = await getDailyTotals(
                             userId,
                             dateStr
                         );
@@ -110,6 +137,7 @@ export const startNotificationSchedulers = () => {
                             targetCalories,
                             totalWater,
                             targetWater: targetWaterMlPerDay,
+                            totalBurned,
                         });
                     } catch (e) {
                         console.error("[Cron] DailySummary error for user", userId, e);
@@ -142,6 +170,67 @@ export const startNotificationSchedulers = () => {
         }
     });
 
+    // ---- Workout Reminder: check every 5 minutes for users with workout preferences ----
+    cron.schedule('*/5 * * * *', async () => {
+        const now = new Date();
+        const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        console.log('[Cron] Running Workout Reminder check at', hhmm);
+
+        const db = await safeGetDb('WorkoutReminder');
+        if (!db) return; // Firestore down or not configured
+
+        // healthProfiles expected to have workout settings under 'workout' field
+        const snap = await db.collection('healthProfiles').get();
+        const users = [];
+        snap.forEach(doc => {
+            const data = doc.data();
+            if (data.userId && data.workout && data.workout.enabled && data.workout.preferredTime) {
+                users.push({ userId: data.userId, workout: data.workout });
+            }
+        });
+
+        const CHUNK = 50;
+        for (let i = 0; i < users.length; i += CHUNK) {
+            const chunk = users.slice(i, i + CHUNK);
+            await Promise.all(chunk.map(async ({ userId, workout }) => {
+                try {
+                    const pref = workout.preferredTime; // 'HH:MM'
+                    // allow small window of 5 minutes
+                    if (!pref) return;
+                    const [ph, pm] = pref.split(':').map(Number);
+                    const prefDate = new Date(now);
+                    prefDate.setHours(ph, pm, 0, 0);
+                    const diff = Math.abs(now.getTime() - prefDate.getTime());
+                    if (diff > 5 * 60 * 1000) return; // outside 5-minute window
+
+                    const dateStr = now.toISOString().slice(0, 10);
+                    const workoutsToday = await db.collection('workouts')
+                        .where('userId', '==', userId)
+                        .where('createdAt', '>=', `${dateStr}T00:00:00.000Z`)
+                        .where('createdAt', '<=', `${dateStr}T23:59:59.999Z`)
+                        .limit(1)
+                        .get();
+
+                    if (!workoutsToday.empty) return; // already logged
+
+                    // send reminder (do not respect quiet hours for timely workout reminders)
+                    console.log('[Cron] Sending workout reminder for user', userId, 'preferredTime=', pref);
+                    await sendPushToUser({
+                        userId,
+                        type: NotificationType.WORKOUT_REMINDER,
+                        variables: {
+                            calories_burned: 0,
+                            target_calories_burned: workout.targetCaloriesBurnPerSession || 200,
+                        },
+                        respectQuietHours: false,
+                    });
+                } catch (e) {
+                    console.error('[Cron] WorkoutReminder error for user', userId, e && (e.message || e));
+                }
+            }));
+        }
+    });
+
     // ---- Re-engagement: 10:00 mỗi ngày, nếu > 3 ngày không login ----
     cron.schedule("0 10 * * *", async () => {
         console.log("[Cron] Running Re-engagement at 10:00");
@@ -171,3 +260,78 @@ export const startNotificationSchedulers = () => {
 
     console.log("✅ Notification schedulers started");
 };
+
+// add a single ESM export that starts both schedulers
+
+export function startSchedulers() {
+    // start per-user workout reminder and daily summary schedulers
+    try {
+        if (typeof startNotificationSchedulers === 'function') startNotificationSchedulers();
+    } catch (e) {
+        console.error('startSchedulers failed', e);
+    }
+}
+
+// Cleanup: delete or archive deviceTokens that have been inactive for a long time
+// days: tokens with isActive==false and lastFailureAt older than `days` will be deleted
+export const cleanupStaleDeviceTokens = async (days = 90) => {
+    const db = await safeGetDb('cleanupStaleDeviceTokens');
+    if (!db) return { removed: 0 };
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffIso = cutoff.toISOString();
+
+    console.log(`[Cleanup] Removing deviceTokens inactive before ${cutoffIso}`);
+
+    const snap = await db.collection('deviceTokens')
+        .where('isActive', '==', false)
+        .where('lastFailureAt', '<', cutoffIso)
+        .get();
+
+    if (snap.empty) {
+        console.log('[Cleanup] No stale device tokens found');
+        return { removed: 0 };
+    }
+
+    const batchSize = 500;
+    let removed = 0;
+    let batch = db.batch();
+    let ops = 0;
+    for (const doc of snap.docs) {
+        batch.delete(doc.ref);
+        ops += 1;
+        removed += 1;
+        if (ops >= batchSize) {
+            await batch.commit();
+            batch = db.batch();
+            ops = 0;
+        }
+    }
+    if (ops > 0) await batch.commit();
+
+    // write a cleanup log for observability
+    try {
+        await db.collection('tokenCleanupLogs').add({
+            removed,
+            cutoff: cutoffIso,
+            createdAt: new Date().toISOString(),
+        });
+    } catch (e) {
+        console.warn('[Cleanup] Failed to write cleanup log', e && (e.message || e));
+    }
+
+    console.log(`[Cleanup] Removed ${removed} stale device tokens`);
+    return { removed };
+};
+
+// Schedule cleanup daily at 03:00 server time
+cron.schedule('0 3 * * *', async () => {
+    try {
+        console.log('[Cron] Running daily device token cleanup');
+        await firebasePromise;
+        const res = await cleanupStaleDeviceTokens(90);
+        console.log('[Cron] Device token cleanup result', res);
+    } catch (e) {
+        console.error('[Cron] Device token cleanup failed', e && (e.message || e));
+    }
+});

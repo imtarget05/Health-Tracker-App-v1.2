@@ -1,11 +1,1 @@
 include: package:flutter_lints/flutter.yaml
-
-# Minimal analysis options to avoid parse errors while you fix lints incrementally.
-analyzer:
-  errors:
-    deprecated_member_use: ignore
-
-# Keep default linter rules from flutter_lints; override only a couple noisy ones.
-linter:
-  rules:
-    avoid_print: false

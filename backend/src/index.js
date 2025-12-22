@@ -12,9 +12,10 @@ import aiRoutes from "./routes/ai.route.js";
 import authRoutes from "./routes/auth.route.js";
 import uploadRoutes from "./routes/upload.route.js";
 import notificationRoutes from "./routes/notification.route.js";
+import workoutRoutes from "./routes/workout.route.js";
 
 import { firebasePromise } from "./lib/firebase.js";
-import { startNotificationSchedulers } from "./notifications/notification.scheduler.js";
+import { startSchedulers } from './notifications/notification.scheduler.js';
 
 dotenv.config();
 
@@ -59,7 +60,7 @@ const startServer = async () => {
             console.log('Scheduler start skipped because DISABLE_SCHEDULER is set');
         } else {
             try {
-                startNotificationSchedulers();
+                startSchedulers();
                 console.log('Notification schedulers started');
             } catch (err) {
                 console.error('Failed to start notification schedulers:', err);
@@ -76,6 +77,7 @@ const startServer = async () => {
         app.use("/stats", statsRoutes);        // /stats/daily, /stats/weekly, /stats/monthly
         app.use("/ai", aiRoutes);              // /ai/chat
         app.use("/notifications", notificationRoutes); // /notifications/test,...
+        app.use("/workouts", workoutRoutes);  // /workouts
 
         // Health check
         app.get("/api/health", (req, res) => {
@@ -154,3 +156,11 @@ const startServer = async () => {
 };
 
 startServer();
+
+// Error handler (must be after routes)
+app.use((err, req, res, next) => {
+    console.error('[ERROR HANDLER]', err && (err.stack || err.message || err));
+    const status = err && err.status ? err.status : 500;
+    const message = err && err.message ? err.message : 'Internal server error';
+    res.status(status).json({ message });
+});

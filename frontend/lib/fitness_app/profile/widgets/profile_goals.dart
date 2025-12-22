@@ -17,8 +17,8 @@ class ProfileGoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: animationController,
-      builder: (_, __) {
+  animation: animationController,
+  builder: (context, child) {
         return FadeTransition(
           opacity: animation,
           child: Container(
@@ -42,7 +42,7 @@ class ProfileGoalCard extends StatelessWidget {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                ...goals.map((g) => Text(g)).toList(),
+                for (final g in goals) Text(g),
               ],
             ),
           ),

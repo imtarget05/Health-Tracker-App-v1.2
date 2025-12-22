@@ -7,6 +7,7 @@ class ProfileStatsCard extends StatelessWidget {
   final AnimationController animationController;
   final String calories;
   final String weight;
+  final String bmi;
   final String height;
 
   const ProfileStatsCard({
@@ -15,7 +16,8 @@ class ProfileStatsCard extends StatelessWidget {
     required this.animationController,
     this.calories = '0 kcal',
     this.weight = '0 kg',
-    this.height = '0 cm',
+  this.height = '0 cm',
+  this.bmi = '—',
   });
 
   @override
@@ -44,7 +46,7 @@ class ProfileStatsCard extends StatelessWidget {
               children: [
                 _StatItem(label: "Năng lượng", value: calories),
                 _StatItem(label: "Cân nặng", value: weight),
-                _StatItem(label: "Chiều cao", value: height),
+                _StatItem(label: "Mục tiêu BMI", value: bmi),
               ],
             ),
           ),

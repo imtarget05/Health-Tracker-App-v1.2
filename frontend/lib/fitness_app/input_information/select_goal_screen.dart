@@ -158,18 +158,18 @@ class _SelectGoalScreenState extends State<SelectGoalScreen>
                         }
                       };
                       ProfileSyncService.instance.saveProfilePartial(data);
-                      Navigator.push(
+                      Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => WelcomeScreen()),
+                        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
                       );
                     },
-                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: FitnessAppTheme.nearlyDarkBlue,
                       padding: EdgeInsets.symmetric(horizontal: 36, vertical: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(32)),
                     ),
+                    child: Text("Next", style: TextStyle(color: FitnessAppTheme.white, fontSize: 16),),
                   ),
                 ],
               ),

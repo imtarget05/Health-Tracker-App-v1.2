@@ -8,7 +8,8 @@ part of 'chat_history.dart';
 
 class ChatHistoryAdapter extends TypeAdapter<ChatHistory> {
   @override
-  final int typeId = 0;
+  @override
+  final int typeId = 3;
 
   @override
   ChatHistory read(BinaryReader reader) {

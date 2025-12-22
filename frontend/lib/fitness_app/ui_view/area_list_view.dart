@@ -55,6 +55,12 @@ class _AreaListViewState extends State<AreaListView>
                       left: 16, right: 16, top: 16, bottom: 16),
                   physics: const BouncingScrollPhysics(),
                   scrollDirection: Axis.vertical,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 16.0,
+                    crossAxisSpacing: 16.0,
+                    childAspectRatio: 1,
+                  ),
                   children: List<Widget>.generate(
                     areaListData.length,
                     (int index) {
@@ -76,12 +82,6 @@ class _AreaListViewState extends State<AreaListView>
                       );
 
                     },
-                  ),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16.0,
-                    crossAxisSpacing: 16.0,
-                    childAspectRatio: 1,
                   ),
                 ),
               ),
