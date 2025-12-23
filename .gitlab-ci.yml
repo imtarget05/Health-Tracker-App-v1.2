@@ -110,7 +110,7 @@ docker-build:
 
 # Manual k8s deploy (requires KUBE_CONFIG)
 deploy-k8s:
-  image: bitnami/kubectl:1.27
+  image: lachlanevenson/k8s-kubectl:v1.27.0
   stage: deploy
   when: manual
   script:
@@ -128,7 +128,7 @@ deploy-k8s:
 
 # Verify deployment by running a short smoke test inside the cluster (requires KUBE_CONFIG)
 smoke-test:
-  image: bitnami/kubectl:1.27
+  image: lachlanevenson/k8s-kubectl:v1.27.0
   stage: verify
   script:
     - |
@@ -145,7 +145,7 @@ smoke-test:
 
 # Deploy monitoring (Prometheus + Grafana) - manual and only on main
 deploy-monitoring:
-  image: bitnami/kubectl:1.27
+  image: lachlanevenson/k8s-kubectl:v1.27.0
   stage: deploy
   when: manual
   script:
