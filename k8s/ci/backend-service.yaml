@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-backend
+  labels:
+    app: health-backend
+spec:
+  selector:
+    app: health-backend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5001
+  type: ClusterIP

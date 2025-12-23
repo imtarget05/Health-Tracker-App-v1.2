@@ -10,3 +10,4 @@ yarn-error.log*
 
 # OS files
 .DS_Store
+healthy-tracker-target-firebase-adminsdk-*.json
