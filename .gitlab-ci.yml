@@ -11,8 +11,6 @@ variables:
   NODE_IMAGE: "node:18"
   BACKEND_DIR: "backend"
   IMAGE_TAG: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
-  # default test script; override TEST_SCRIPT in CI variables for stricter behaviour
-  TEST_SCRIPT: "npm test || true"
 
 # Run backend tests
 test-backend:
@@ -21,7 +19,13 @@ test-backend:
   script:
     - cd ${BACKEND_DIR}
     - npm ci
-    - eval "$TEST_SCRIPT"
+    - |
+      # Allow overriding TEST_SCRIPT from CI variables. Default to running tests but don't fail the job on missing emulator tests.
+      if [ -n "${TEST_SCRIPT}" ]; then
+        eval "${TEST_SCRIPT}"
+      else
+        npm test || true
+      fi
   artifacts:
     when: always
     expire_in: 1h
@@ -84,4 +88,3 @@ deploy-k8s:
       kubectl apply -f k8s/ci/backend-service.yaml
   only:
     - branches
-    - npm test
