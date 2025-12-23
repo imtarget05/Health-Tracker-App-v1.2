@@ -110,9 +110,13 @@ docker-build:
 
 # Manual k8s deploy (requires KUBE_CONFIG)
 deploy-k8s:
-  image: lachlanevenson/k8s-kubectl:v1.27.0
+  image: docker:24
   stage: deploy
   when: manual
+  before_script:
+    - KUBECTL_VERSION="1.27.0"
+    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
   script:
     - |
       if [ -z "$KUBE_CONFIG" ]; then
@@ -128,8 +132,12 @@ deploy-k8s:
 
 # Verify deployment by running a short smoke test inside the cluster (requires KUBE_CONFIG)
 smoke-test:
-  image: lachlanevenson/k8s-kubectl:v1.27.0
+  image: docker:24
   stage: verify
+  before_script:
+    - KUBECTL_VERSION="1.27.0"
+    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
   script:
     - |
       if [ -z "$KUBE_CONFIG" ]; then
@@ -145,9 +153,13 @@ smoke-test:
 
 # Deploy monitoring (Prometheus + Grafana) - manual and only on main
 deploy-monitoring:
-  image: lachlanevenson/k8s-kubectl:v1.27.0
+  image: docker:24
   stage: deploy
   when: manual
+  before_script:
+    - KUBECTL_VERSION="1.27.0"
+    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
   script:
     - mkdir -p ~/.kube
     - echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
