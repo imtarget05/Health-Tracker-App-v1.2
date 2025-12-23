@@ -85,12 +85,15 @@ docker-build:
     - name: docker:24-dind
   script:
     - cd ${BACKEND_DIR}
-    - docker build -t ${IMAGE_TAG} .
     - |
+      # compute a safe, lowercase image tag using CI_REGISTRY_IMAGE (already lowercase)
+      IMAGE_TAG="${CI_REGISTRY_IMAGE}/backend:${CI_COMMIT_SHORT_SHA}"
+      IMAGE_TAG=$(echo "$IMAGE_TAG" | tr '[:upper:]' '[:lower:]')
+      docker build -t "$IMAGE_TAG" .
       if [ -n "$CI_REGISTRY" ] && [ -n "$CI_REGISTRY_USER" ] && [ -n "$CI_REGISTRY_PASSWORD" ]; then
         echo "Logging into registry ${CI_REGISTRY}"
         echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-        docker push ${IMAGE_TAG}
+        docker push "$IMAGE_TAG"
       else
         echo "Registry credentials not configured; built image will remain on runner only."
       fi
