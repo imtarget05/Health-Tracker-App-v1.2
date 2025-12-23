@@ -52,3 +52,4 @@ dist/
 # models
 AI/models/
 backend/healthy-tracker-target-firebase-adminsdk-*.json
+pipeline-logs/
