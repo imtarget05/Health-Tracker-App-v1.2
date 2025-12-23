@@ -1,6 +1,4 @@
 ---
-image: docker:24
-
 stages:
   - test
   - semgrep
@@ -164,9 +162,17 @@ deploy-monitoring:
     - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
     - chmod +x /usr/local/bin/kubectl
   script:
-    - mkdir -p ~/.kube
-    - echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
-    - kubectl -n monitoring apply -f k8s/monitoring/prometheus.yaml
-    - kubectl -n monitoring apply -f k8s/monitoring/grafana.yaml
+    - |
+      if [ -z "$KUBE_CONFIG" ]; then
+        echo "KUBE_CONFIG not set; skipping deploy-monitoring"
+        exit 0
+      fi
+      mkdir -p ~/.kube
+      echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+      # Print the configured API server (no secrets) to help debug connectivity
+      SERVER=$(kubectl config view --raw -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)
+      echo "Configured Kubernetes API server: ${SERVER:-(unknown)}"
+      kubectl -n monitoring apply -f k8s/monitoring/prometheus.yaml || { echo "kubectl apply prometheus failed; cluster may be unreachable"; exit 1; }
+      kubectl -n monitoring apply -f k8s/monitoring/grafana.yaml || { echo "kubectl apply grafana failed; cluster may be unreachable"; exit 1; }
   only:
     - main
