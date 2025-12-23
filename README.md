@@ -4,27 +4,27 @@ A full-stack Health Tracker application that helps users record daily health met
 
 ## ✨ Highlights
 
--- 🧭 User-centric tracking: calories, water, meals, and other daily health metrics.
--- 🧠 AI-assisted food and health analysis using a custom model and optional external APIs.
--- ⏰ Smart reminders and notifications for meals, hydration, and activity.
--- 🔐 Authentication via Google, Facebook and Firebase.
--- 📱 Mobile-first UX implemented in Flutter.
--- 🚀 CI/CD-ready with GitLab, Docker images, and Kubernetes manifests.
+- 🧭 User-centric tracking: calories, water, meals, and other daily health metrics.
+- 🧠 AI-assisted food and health analysis using a custom model and optional external APIs.
+- ⏰ Smart reminders and notifications for meals, hydration, and activity.
+- 🔐 Authentication via Google, Facebook and Firebase.
+- 📱 Mobile-first UX implemented in Flutter.
+- 🚀 CI/CD-ready with GitLab, Docker images, and Kubernetes manifests.
 
 ## 🧰 Tech stack
 
--- Frontend: Flutter 📱
--- Backend: Node.js (Express) ⚙️
--- Auth/Database: Firebase (Auth + Firestore) 🔒
--- AI Service: Python 3.11, FastAPI, Uvicorn 🤖
--- DevOps: Docker, Docker Compose, GitLab CI/CD, SonarQube, Semgrep, Kubernetes (EKS-compatible) 🧩
+- Frontend: Flutter 📱
+- Backend: Node.js (Express) ⚙️
+- Auth/Database: Firebase (Auth + Firestore) 🔒
+- AI Service: Python 3.11, FastAPI, Uvicorn 🤖
+- DevOps: Docker, Docker Compose, GitLab CI/CD, SonarQube, Semgrep, Kubernetes (EKS-compatible) 🧩
 
 ## 🗂 Repository layout
 
--- `backend/` – Node.js API, Firebase integration, cloud functions 🧩
--- `AI/` – FastAPI service for image/nutrition inference and model artifacts 🧠
--- `frontend/` – Flutter mobile application 📱
--- `k8s/`, `ci/`, `docker-compose.yml` – deployment and CI resources ☁️
+- `backend/` – Node.js API, Firebase integration, cloud functions 🧩
+- `AI/` – FastAPI service for image/nutrition inference and model artifacts 🧠
+- `frontend/` – Flutter mobile application 📱
+- `k8s/`, `ci/`, `docker-compose.yml` – deployment and CI resources ☁️
 
 ## ⚡ Quickstart (local development)
 
@@ -120,6 +120,7 @@ Required CI variables (examples):
 ## 👤 Author
 
 Mai Nguyễn Bình Tân — Software Engineering, AI & DevOps
+Nguyễn Đăng Khoa - UI/UX
 
 ---
 
@@ -180,18 +181,15 @@ Troubleshooting tips
 
 Below are selected mobile screenshots taken from the iOS simulator illustrating the app's main screens and interaction flow. Use these as a quick visual reference for UX decisions, handoffs, or README previews.
 
-### Hero
-![Hero screenshot](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png)
+### Screens (ordered)
 
-### Key screens
-- Dashboard / Daily summary — shows calories, water, and today's activity.
-	![Dashboard](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png)
+| 01 | 02 | 03 |
+|---:|---:|---:|
+| [![01 - Hero](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png) | [![02 - Dashboard](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png) | [![03 - Meal logging](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png) |
 
-- Meal logging — camera / gallery capture and AI-powered nutrition inference.
-	![Meal logging](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png)
-
-- Reminders & notifications — hydration reminders and scheduled alerts.
-	![Reminders](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png)
+| 04 |  |  |
+|---:|---:|---:|
+| [![04 - Reminders](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png) |  |  |
 
 ### Design notes
 - Visual hierarchy: clear separation between daily metrics and action buttons to reduce cognitive load.
@@ -200,43 +198,75 @@ Below are selected mobile screenshots taken from the iOS simulator illustrating 
 
 If you prefer different images or lower-resolution thumbnails for the README, I can (a) resize and add thumbnails under `image/` and update links, or (b) generate a single combined hero image. Which option do you prefer?
 
-### 📸 Expanded gallery
+### 📸 Expanded gallery (ordered)
+
 Below is a larger set of screenshots and sample food images to help reviewers, designers, or QA understand flows and AI results.
 
 #### App screens (iOS simulator)
-- Hero / onboarding
-	![Hero](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png)
 
-- Dashboard / overview
-	![Overview 1](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png)
-	![Overview 2](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png)
+| 01 | 02 | 03 |
+|---:|---:|---:|
+| [![01](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png) | [![02](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png) | [![03](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png) |
 
-- Capture & results
-	![Capture 1](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png)
-	![Capture 2](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.48.png)
-	![Capture 3](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.00.png)
-	![Capture 4](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.25.png)
-	![Capture 5](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.32.png)
-	![Capture 6](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.36.png)
+| 04 | 05 | 06 |
+|---:|---:|---:|
+| [![04](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png) | [![05](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.48.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.48.png) | [![06](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.00.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.00.png) |
+
+| 07 | 08 | 09 |
+|---:|---:|---:|
+| [![07](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.25.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.25.png) | [![08](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.32.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.32.png) | [![09](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.36.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.36.png) |
+
+| 10 | 11 | 12 |
+|---:|---:|---:|
+| [![10](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.08.47.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.08.47.png) | [![11](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.19.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.19.png) | [![12](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.26.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.26.png) |
+
+| 13 | 14 | 15 |
+|---:|---:|---:|
+| [![13](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.50.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.50.png) | [![14](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.00.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.00.png) | [![15](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.20.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.20.png) |
+
+| 16 |  |  |
+|---:|---:|---:|
+| [![16](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.12.56.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.12.56.png) |  |  |
 
 #### Sample food images (model inputs)
-- These images come from the `image/` folder and represent sample inputs for the AI model.
-	![Food 1](./image/0530df4c0e52810cd84320.jpg)
-	![Food 2](./image/092adb500a4e8510dc5f17.jpg)
-	![Food 3](./image/1f09e670376eb830e17f12.jpg)
-	![Food 4](./image/318755f984e70bb952f65.jpg)
-	![Food 5](./image/37681c14cd0a42541b1b13.jpg)
-	![Food 6](./image/3b174e6d9f73102d496219.jpg)
-	![Food 7](./image/509f63e4b2fa3da464eb3.jpg)
-	![Food 8](./image/5377b80a6914e64abf057.jpg)
-	![Food 9](./image/5f043979e86767393e769.jpg)
-	![Food 10](./image/63b54bcb9ad5158b4cc415.jpg)
-	![Food 11](./image/64dbf2a423baace4f5ab16.jpg)
-	![Food 12](./image/80dbbaa16bbfe4e1bdae4.jpg)
+
+These images come from the `image/` folder and represent sample inputs for the AI model.
+
+| 01 | 02 | 03 |
+|---:|---:|---:|
+| [![01](./image/thumbs/0530df4c0e52810cd84320.jpg)](./image/0530df4c0e52810cd84320.jpg) | [![02](./image/thumbs/092adb500a4e8510dc5f17.jpg)](./image/092adb500a4e8510dc5f17.jpg) | [![03](./image/thumbs/1f09e670376eb830e17f12.jpg)](./image/1f09e670376eb830e17f12.jpg) |
+
+| 04 | 05 | 06 |
+|---:|---:|---:|
+| [![04](./image/thumbs/318755f984e70bb952f65.jpg)](./image/318755f984e70bb952f65.jpg) | [![05](./image/thumbs/37681c14cd0a42541b1b13.jpg)](./image/37681c14cd0a42541b1b13.jpg) | [![06](./image/thumbs/3b174e6d9f73102d496219.jpg)](./image/3b174e6d9f73102d496219.jpg) |
+
+| 07 | 08 | 09 |
+|---:|---:|---:|
+| [![07](./image/thumbs/509f63e4b2fa3da464eb3.jpg)](./image/509f63e4b2fa3da464eb3.jpg) | [![08](./image/thumbs/5377b80a6914e64abf057.jpg)](./image/5377b80a6914e64abf057.jpg) | [![09](./image/thumbs/5f043979e86767393e769.jpg)](./image/5f043979e86767393e769.jpg) |
+
+| 10 | 11 | 12 |
+|---:|---:|---:|
+| [![10](./image/thumbs/63b54bcb9ad5158b4cc415.jpg)](./image/63b54bcb9ad5158b4cc415.jpg) | [![11](./image/thumbs/64dbf2a423baace4f5ab16.jpg)](./image/64dbf2a423baace4f5ab16.jpg) | [![12](./image/thumbs/80dbbaa16bbfe4e1bdae4.jpg)](./image/80dbbaa16bbfe4e1bdae4.jpg) |
+
+| 13 | 14 | 15 |
+|---:|---:|---:|
+| [![13](./image/thumbs/8474100fc1114e4f170011.jpg)](./image/8474100fc1114e4f170011.jpg) | [![14](./image/thumbs/96b50fcaded4518a08c521.jpg)](./image/96b50fcaded4518a08c521.jpg) | [![15](./image/thumbs/9f6bd211030f8c51d51e1.jpg)](./image/9f6bd211030f8c51d51e1.jpg) |
+
+| 16 | 17 | 18 |
+|---:|---:|---:|
+| [![16](./image/thumbs/9ff1228df3937ccd258210.jpg)](./image/9ff1228df3937ccd258210.jpg) | [![17](./image/thumbs/d0ea80975189ded7879814.jpg)](./image/d0ea80975189ded7879814.jpg) | [![18](./image/thumbs/dc8e56f587eb08b551fa8.jpg)](./image/dc8e56f587eb08b551fa8.jpg) |
+
+| 19 | 20 | 21 |
+|---:|---:|---:|
+| [![19](./image/thumbs/e7aeb4d565cbea95b3da6.jpg)](./image/e7aeb4d565cbea95b3da6.jpg) | [![20](./image/thumbs/e7f1288bf99576cb2f8422.jpg)](./image/e7f1288bf99576cb2f8422.jpg) | [![21](./image/thumbs/ee7a3900e81e67403e0f18.jpg)](./image/ee7a3900e81e67403e0f18.jpg) |
+
+| 22 |  |  |
+|---:|---:|---:|
+| [![22](./image/thumbs/f553572b8635096b50242.jpg)](./image/f553572b8635096b50242.jpg) |  |  |
 
 #### Captions / bilingual notes
 - Dashboard: Tổng quan hàng ngày — calories, nước, hoạt động. (Daily overview)
 - Meal logging: Chụp ảnh → Gửi đến AI → Trả về nhãn dinh dưỡng. (Capture → AI inference → Nutrition labels)
 - Reminders: Lập lịch nhắc uống nước và bữa ăn. (Scheduled hydration & meal reminders)
 
-If you want, I can generate thumbnail copies (smaller files) under `image/thumbs/` to reduce README size and update these links automatically — say `yes` and I will create them.
+
