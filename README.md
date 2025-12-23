@@ -16,7 +16,7 @@ A full-stack Health Tracker application that helps users record daily health met
 - Frontend: Flutter 📱
 - Backend: Node.js (Express) ⚙️
 - Auth/Database: Firebase (Auth + Firestore) 🔒
-- AI Service: Python 3.11, FastAPI, Uvicorn 🤖
+- AI Service: Python 3.11, FastAPI, Uvicorn 🤖, Gemini
 - DevOps: Docker, Docker Compose, GitLab CI/CD, SonarQube, Semgrep, Kubernetes (EKS-compatible) 🧩
 
 ## 🗂 Repository layout
@@ -185,11 +185,11 @@ Below are selected mobile screenshots taken from the iOS simulator illustrating 
 
 | 01 | 02 | 03 |
 |---:|---:|---:|
-| [![01 - Hero](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png) | [![02 - Dashboard](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png) | [![03 - Meal logging](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png) |
+| [![01 - Hero](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.22.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.22.png) | [![02 - Dashboard](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.30.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.30.png) | [![03 - Meal logging](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.45.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.45.png) |
 
 | 04 |  |  |
 |---:|---:|---:|
-| [![04 - Reminders](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png) |  |  |
+| [![04 - Reminders](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.10.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.10.png) |  |  |
 
 ### Design notes
 - Visual hierarchy: clear separation between daily metrics and action buttons to reduce cognitive load.
@@ -206,27 +206,27 @@ Below is a larger set of screenshots and sample food images to help reviewers, d
 
 | 01 | 02 | 03 |
 |---:|---:|---:|
-| [![01](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.22.png) | [![02](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.30.png) | [![03](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.05.45.png) |
+| [![01](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.22.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.22.png) | [![02](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.30.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.30.png) | [![03](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.45.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.45.png) |
 
 | 04 | 05 | 06 |
 |---:|---:|---:|
-| [![04](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.10.png) | [![05](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.48.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.06.48.png) | [![06](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.00.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.00.png) |
+| [![04](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.10.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.10.png) | [![05](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.48.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.48.png) | [![06](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.00.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.00.png) |
 
 | 07 | 08 | 09 |
 |---:|---:|---:|
-| [![07](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.25.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.25.png) | [![08](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.32.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.32.png) | [![09](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.36.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.07.36.png) |
+| [![07](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.25.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.25.png) | [![08](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.32.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.32.png) | [![09](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.36.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.07.36.png) |
 
 | 10 | 11 | 12 |
 |---:|---:|---:|
-| [![10](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.08.47.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.08.47.png) | [![11](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.19.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.19.png) | [![12](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.26.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.26.png) |
+| [![10](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.08.47.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.08.47.png) | [![11](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.19.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.19.png) | [![12](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.26.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.26.png) |
 
 | 13 | 14 | 15 |
 |---:|---:|---:|
-| [![13](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.50.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.09.50.png) | [![14](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.00.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.00.png) | [![15](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.20.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.10.20.png) |
+| [![13](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.50.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.50.png) | [![14](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.00.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.00.png) | [![15](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.20.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.20.png) |
 
 | 16 |  |  |
 |---:|---:|---:|
-| [![16](./image/thumbs/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.12.56.png)](./image/Simulator Screenshot - iPhone 17 Pro - 2025-12-23 at 20.12.56.png) |  |  |
+| [![16](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.12.56.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.12.56.png) |  |  |
 
 #### Sample food images (model inputs)
 
