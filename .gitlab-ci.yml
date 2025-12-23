@@ -110,14 +110,14 @@ docker-build:
 
 # Manual k8s deploy (requires KUBE_CONFIG)
 deploy-k8s:
-  image: docker:24
+  image: alpine:3.18
   stage: deploy
   when: manual
   before_script:
-  - KUBECTL_VERSION="1.27.0"
-  - apt-get update && apt-get install -y curl ca-certificates
-  - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-  - chmod +x /usr/local/bin/kubectl
+    - apk add --no-cache curl ca-certificates
+    - KUBECTL_VERSION="1.27.0"
+    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
   script:
     - |
       if [ -z "$KUBE_CONFIG" ]; then
@@ -133,13 +133,13 @@ deploy-k8s:
 
 # Verify deployment by running a short smoke test inside the cluster (requires KUBE_CONFIG)
 smoke-test:
-  image: docker:24
+  image: alpine:3.18
   stage: verify
   before_script:
-  - KUBECTL_VERSION="1.27.0"
-  - apt-get update && apt-get install -y curl ca-certificates
-  - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-  - chmod +x /usr/local/bin/kubectl
+    - apk add --no-cache curl ca-certificates
+    - KUBECTL_VERSION="1.27.0"
+    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
   script:
     - |
       if [ -z "$KUBE_CONFIG" ]; then
@@ -155,14 +155,14 @@ smoke-test:
 
 # Deploy monitoring (Prometheus + Grafana) - manual and only on main
 deploy-monitoring:
-  image: docker:24
+  image: alpine:3.18
   stage: deploy
   when: manual
   before_script:
-  - KUBECTL_VERSION="1.27.0"
-  - apt-get update && apt-get install -y curl ca-certificates
-  - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-  - chmod +x /usr/local/bin/kubectl
+    - apk add --no-cache curl ca-certificates
+    - KUBECTL_VERSION="1.27.0"
+    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
   script:
     - mkdir -p ~/.kube
     - echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
