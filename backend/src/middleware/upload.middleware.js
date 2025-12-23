@@ -8,7 +8,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // thư mục tạm ngay cạnh file middleware (hoặc bạn đổi theo ý)
-const uploadTempDir = path.join(__dirname, "tmp");
+// Use a system-writable temporary directory to avoid permission issues inside containers.
+// This is safe: /tmp is ephemeral and writable by default.
+const uploadTempDir = path.join("/tmp", "health-tracker-upload-tmp");
 if (!fs.existsSync(uploadTempDir)) {
     fs.mkdirSync(uploadTempDir, { recursive: true });
 }

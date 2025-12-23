@@ -26,5 +26,9 @@ COPY . .
 # Expose port trong container (Azure/AWS sẽ map ra ngoài)
 EXPOSE ${PORT}
 
+# Ensure container does not run as root: create a non-root user and switch
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup || true && chown -R appuser:appgroup /app
+USER appuser
+
 # Chạy uvicorn
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]

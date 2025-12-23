@@ -42,9 +42,22 @@ except Exception as e:
 # =========================
 # CORS
 # =========================
+# Configure CORS: default allow local dev origins, in production set ALLOWED_ORIGINS env var (comma-separated)
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
+if allowed_origins_env:
+    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+else:
+    # development default: localhost origins
+    allowed_origins = [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:3000",
+        "http://localhost:5000",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # có thể siết lại khi lên production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

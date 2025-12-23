@@ -19,6 +19,11 @@ spec:
         - name: health-backend
           image: REPLACE_IMAGE
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
           envFrom:
             - secretRef:
                 name: health-backend-env

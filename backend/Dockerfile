@@ -13,7 +13,9 @@ EXPOSE 5001
 
 # create a non-root user for improved security and set ownership
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-RUN chown -R appuser:appgroup /usr/src/app
+RUN mkdir -p /usr/src/app/src/middleware/tmp && \
+	chown -R appuser:appgroup /usr/src/app && chown -R appuser:appgroup /usr/src/app/src/middleware/tmp && \
+	chmod -R a+rwx /usr/src/app/src/middleware/tmp || true
 
 # default env will come from docker-compose or env file
 USER appuser

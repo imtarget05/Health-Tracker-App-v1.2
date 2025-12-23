@@ -44,7 +44,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDtFJJ09UgTVmbhYvEltoT1hGzstbr-A5o',
+    apiKey: '<REDACTED - SET VIA ENV>',
     appId: '1:484752358530:web:1956c95e11d6d2e25dc89b',
     messagingSenderId: '484752358530',
     projectId: 'healthy-tracker-target',
@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCPD1mBZW1lQkWAnbastovYKS8IpnBnb4A',
+    apiKey: '<REDACTED - SET VIA ENV>',
     appId: '1:484752358530:android:e7d77b01afd2aee45dc89b',
     messagingSenderId: '484752358530',
     projectId: 'healthy-tracker-target',
@@ -62,7 +62,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDPj0LByXLr4LJ71ePONytKzjhNZ2tAlk0',
+    apiKey: '<REDACTED - SET VIA ENV>',
     appId: '1:484752358530:ios:fa529cbbc919ced55dc89b',
     messagingSenderId: '484752358530',
     projectId: 'healthy-tracker-target',
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDPj0LByXLr4LJ71ePONytKzjhNZ2tAlk0',
+    apiKey: '<REDACTED - SET VIA ENV>',
     appId: '1:484752358530:ios:fa529cbbc919ced55dc89b',
     messagingSenderId: '484752358530',
     projectId: 'healthy-tracker-target',
