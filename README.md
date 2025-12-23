@@ -187,8 +187,8 @@ Below are selected mobile screenshots taken from the iOS simulator illustrating 
 |---:|---:|---:|
 | [![01 - Hero](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.22.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.22.png) | [![02 - Dashboard](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.30.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.30.png) | [![03 - Meal logging](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.45.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.05.45.png) |
 
-| 04 |  |  |
-|---:|---:|---:|
+| 04 |
+|---:|
 | [![04 - Reminders](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.10.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.06.10.png) |  |  |
 
 ### Design notes
@@ -224,8 +224,8 @@ Below is a larger set of screenshots and sample food images to help reviewers, d
 |---:|---:|---:|
 | [![13](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.50.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.09.50.png) | [![14](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.00.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.00.png) | [![15](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.20.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.10.20.png) |
 
-| 16 |  |  |
-|---:|---:|---:|
+| 16 |
+|---:|
 | [![16](./image/thumbs/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.12.56.png)](./image/Simulator%20Screenshot%20-%20iPhone%2017%20Pro%20-%202025-12-23%20at%2020.12.56.png) |  |  |
 
 #### Sample food images (model inputs)
@@ -260,8 +260,8 @@ These images come from the `image/` folder and represent sample inputs for the A
 |---:|---:|---:|
 | [![19](./image/thumbs/e7aeb4d565cbea95b3da6.jpg)](./image/e7aeb4d565cbea95b3da6.jpg) | [![20](./image/thumbs/e7f1288bf99576cb2f8422.jpg)](./image/e7f1288bf99576cb2f8422.jpg) | [![21](./image/thumbs/ee7a3900e81e67403e0f18.jpg)](./image/ee7a3900e81e67403e0f18.jpg) |
 
-| 22 |  |  |
-|---:|---:|---:|
+| 22 |
+|---:|
 | [![22](./image/thumbs/f553572b8635096b50242.jpg)](./image/f553572b8635096b50242.jpg) |  |  |
 
 #### Captions / bilingual notes
