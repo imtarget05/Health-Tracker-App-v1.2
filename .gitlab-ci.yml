@@ -114,9 +114,10 @@ deploy-k8s:
   stage: deploy
   when: manual
   before_script:
-    - KUBECTL_VERSION="1.27.0"
-    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-    - chmod +x /usr/local/bin/kubectl
+  - KUBECTL_VERSION="1.27.0"
+  - apt-get update && apt-get install -y curl ca-certificates
+  - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  - chmod +x /usr/local/bin/kubectl
   script:
     - |
       if [ -z "$KUBE_CONFIG" ]; then
@@ -135,9 +136,10 @@ smoke-test:
   image: docker:24
   stage: verify
   before_script:
-    - KUBECTL_VERSION="1.27.0"
-    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-    - chmod +x /usr/local/bin/kubectl
+  - KUBECTL_VERSION="1.27.0"
+  - apt-get update && apt-get install -y curl ca-certificates
+  - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  - chmod +x /usr/local/bin/kubectl
   script:
     - |
       if [ -z "$KUBE_CONFIG" ]; then
@@ -157,9 +159,10 @@ deploy-monitoring:
   stage: deploy
   when: manual
   before_script:
-    - KUBECTL_VERSION="1.27.0"
-    - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-    - chmod +x /usr/local/bin/kubectl
+  - KUBECTL_VERSION="1.27.0"
+  - apt-get update && apt-get install -y curl ca-certificates
+  - curl -L --fail -o /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  - chmod +x /usr/local/bin/kubectl
   script:
     - mkdir -p ~/.kube
     - echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
