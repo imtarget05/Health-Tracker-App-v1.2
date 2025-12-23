@@ -13,3 +13,41 @@ AI/*.pyc
 # Ignore dataset folder (large data that should not be committed)
 Dataset/
 Dataset/**
+
+# Node
+node_modules/
+
+# Firebase emulators and credentials
+backend/healthy-tracker-target-firebase-adminsdk-*.json
+backend/*.firebase*
+
+# Python venvs
+AI/.venv311/
+AI/.venv*/
+
+# Environment files
+*.env
+.env*
+
+# Docker
+*.tar
+
+# IDEs
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# kube config
+.kube/
+
+# build outputs
+build/
+dist/
+
+# models
+AI/models/
