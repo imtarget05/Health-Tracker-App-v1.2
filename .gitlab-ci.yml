@@ -44,10 +44,13 @@ test-backend:
 
 # Semgrep security scan (SAST)
 semgrep-scan:
-  image: returntocorp/semgrep:latest
+  image: python:3.11
   stage: semgrep
+  before_script:
+    - python3 -m pip install --upgrade pip
+    - pip install semgrep
   script:
-    - semgrep --config auto
+    - semgrep --config auto . | tee semgrep.log
   allow_failure: false
   artifacts:
     when: always
