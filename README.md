@@ -1,6 +1,57 @@
 # 🩺 Health Tracker App
 
-A full-stack Health Tracker application that helps users record daily health metrics and build sustainable habits. The project combines a **Flutter** mobile client, a **Node.js** backend, an **AI microservice** (FastAPI), and **Firebase** for authentication and data storage. It is designed to be production-ready with Docker, CI/CD, and Kubernetes deployment configurations.
+A full-stack Health Tracker application that helps users record daily health metrics and build sustainable habits. The project combines a **Flutter** mobile client, a **Node.js** backend, an **AI microservice** (FastAPI), and **Firebase** for authentication and data storage. It is a **work-in-progress portfolio project with deployment configuration, not a production-ready system** - see [Status and known gaps](#-status-and-known-gaps) below for what actually works and what does not.
+
+## 📍 Status and known gaps
+
+This section records what has actually been verified, so the rest of this README
+is not read as a description of a running system.
+
+**Verified on 2026-09-26**
+
+- `cd backend && npm test` -> `Tests: 1 skipped, 30 passed, 31 total`.
+- `backend/test/seed.integration.test.js` is **skipped**, not passed, unless the
+  Firestore emulator is running. It previously returned early and was reported as a
+  PASS, which inflated the count.
+- The backend **cannot start without configuration**. `backend/src/index.js` refuses
+  to boot unless `FIREBASE_API_KEY`, `GOOGLE_CLIENT_ID`, `FACEBOOK_APP_ID`,
+  `FACEBOOK_APP_SECRET`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `AI_SERVICE_URL` and
+  `AI_CHAT_API_KEY` are all set. Verified by importing `src/index.js` with an empty
+  environment.
+
+**Known gaps**
+
+- **No CI runs on GitHub.** The only pipeline definition is `.gitlab-ci.yml`; this
+  repository has no `.github/` directory, so nothing executes on a GitHub push or
+  pull request.
+- **`.gitlab-ci.yml` has never been proven green.** Two jobs reference things that
+  do not exist: `security-dast` curls `http://localhost:5001/api/v1/health`, but the
+  app serves its health check at `GET /api/health` (`backend/src/index.js:123`) and
+  mounts no `/api/v1` prefix; `deploy-monitoring` applies
+  `k8s/monitoring/prometheus.yaml` and `k8s/monitoring/grafana.yaml`, and there is
+  no `k8s/monitoring/` directory.
+- **Most passing tests do not exercise the application.**
+  `backend/test/auth.integration.test.js` builds a mock Express app inside the test
+  file and asserts against that mock, not against `src/`.
+- **The Flutter client has not been built.** Flutter and Dart are not installed on
+  the machine used for this assessment, so `flutter build` and `flutter test` were
+  **NOT VERIFIED** and no Flutter/Dart toolchain was installed to find out.
+
+### Repository size
+
+GitHub reports this repository at roughly **271 MB**, while the working tree is only
+about **23 MiB**. The difference is git-history bloat: large binaries (model weights,
+build output, dependency trees) were committed at some point and later deleted from
+`HEAD`, so they still exist in history.
+
+This was **not** cleaned up here. Removing it requires rewriting history with
+`git filter-repo` (or `git lfs migrate`), which changes every commit SHA and forces
+a coordinated re-clone or force-push for anyone who has a copy. That is a
+destructive, owner-level decision, so it is left to the repository owner as a
+separate, deliberate step. The working tree is now clean of the orphan artifacts
+that were reachable from `HEAD` (see `.gitignore`).
+
+---
 
 ## ✨ Highlights
 
@@ -9,7 +60,7 @@ A full-stack Health Tracker application that helps users record daily health met
 - ⏰ **Smart notifications**: Automated reminders for meals, hydration, workouts, and daily summaries.
 - 🔐 **Secure Auth**: Authentication via Google, Facebook, and Firebase Auth.
 - 📱 **Mobile-first UX**: Smooth, intuitive interface built with Flutter.
-- 🚀 **DevOps Ready**: CI/CD pipelines (GitLab), Docker, and Kubernetes manifests (EKS-compatible).
+- 🚀 **Deployment config, not deployment**: a GitLab CI definition, a Dockerfile and Kubernetes manifests are present. None of them is proven to run - see [Status and known gaps](#-status-and-known-gaps).
 
 ---
 

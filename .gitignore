@@ -7,10 +7,12 @@
 # Ignore nested project directory
 Health-Tracker-App/
 
-# Ignore python venv and caches
+# Python venvs and caches (repo-wide, not just AI/)
+**/__pycache__/
+*.pyc
+*.pyo
 AI/.venv/
-AI/__pycache__/
-AI/*.pyc
+AI/.venv311/
 
 # Ignore dotenv files
 *.env
@@ -24,15 +26,24 @@ Dataset/**
 /backend/.env
 /backend/*.json
 /frontend/.env
-/AI/models/
+# ML model artifacts. Only best.pt is committed because AI/predictor.py
+# loads it at startup and nothing downloads it; every other entry below is
+# either training output or a duplicate of best.pt.
+/AI/models/*
+!/AI/models/best.pt
+!/AI/models/data.yaml
+!/AI/models/model_info.json
+!/AI/models/pipeline_config.json
+!/AI/models/nutrition_lookup.csv
+!/AI/models/nutrition_mapping.json
+!/AI/models/nutrition_mapping.pkl
 
 # Build / caches / editor / virtual envs
 /frontend/build/
 /frontend/.dart_tool/
 /frontend/.git-backup/
-/AI/.venv311/
 /AI/__pycache__/
-/backend/node_modules/
+node_modules/
 /frontend/ios/Pods/
 /*.log
 
@@ -40,3 +51,8 @@ Dataset/**
 /backend/.env
 /backend/*.serviceAccount.json
 /backend/*-firebase-adminsdk-*.json
+
+# Runtime upload staging area. src/middleware/upload.middleware.js recreates it on
+# startup (fs.mkdirSync) and deletes anything older than 24h, so it must never
+# be committed. Four orphan uploads were committed here on 2026-09-26.
+/backend/src/middleware/tmp/
